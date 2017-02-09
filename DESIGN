@@ -1,0 +1,31 @@
+Features:
+
+* record loops for a while
+* multiple versions of the same thing
+* set tempo from midi clock or tap tempo
+* slice the loop according to the tempo (in semis/minims/crotchets/quavers/whateves)
+* play it back with fx
+  * stutter (volume)
+  * reverse
+  * swap
+  * or general LV2 fx
+* LFO to automate the fx: each effect has 'threshold'/'probability' input following the signal
+* some effects have a 2nd parameter that the random can also route to
+* finally a "random" effect routes the trigger signal to a random effect each time
+* I guess you can also automate the length of the slices
+
+To implement:
+
+* Initial C implementation; GStreamer good for initial work
+
+# Related
+
+http://www.audioblast.me/instalooper.html
+
+https://illformed.com/
+https://ask.audio/articles/5-excellent-plugins-for-audio-glitch-stutter-effects
+http://glitchmachines.com/
+
+https://github.com/free-wheeling/freewheeling/wiki
+
+various free plugins around if you can get a Windows VST host up ...
