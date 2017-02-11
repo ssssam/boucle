@@ -72,13 +72,13 @@ instantiate (const LV2_Descriptor* descriptor,
 	self->buffer = calloc (buffer_length, sizeof(float));
 
 	if (!self->buffer) {
-		lv2_log_error (&self->logger, "Unable to allocate buffer of %lu samples",
+		lv2_log_error (&self->logger, "Unable to allocate buffer of %zu samples\n",
 		               self->buffer_length);
 		free (self);
 		return NULL;
 	}
 
-	lv2_log_trace (&self->logger, "Successfully initialized Boucle plugin");
+	lv2_log_trace (&self->logger, "Successfully initialized Boucle plugin\n");
 
 	return (LV2_Handle) self;
 };
@@ -136,6 +136,9 @@ run (LV2_Handle instance,
 	    ceil (seconds_per_beat * loop_length_beats * self->samplerate),
 	    self->buffer_length);
 
+	lv2_log_trace (&self->logger, "Boucle loop started; loop length is %zu samples\n",
+	    loop_length_samples);
+
 	/* Store the input into the buffer */
 	for (uint32_t pos = 0; pos < n_samples; pos++) {
 		self->buffer[self->record_head] = input[pos];
@@ -168,6 +171,9 @@ run (LV2_Handle instance,
 			}
 		}
 	}
+
+	lv2_log_trace (&self->logger, "Processed %i samples; buffer %s\n", n_samples,
+	               self->buffer_full ? "full" : "not full");
 }
 
 static void
