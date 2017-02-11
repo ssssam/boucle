@@ -31,17 +31,16 @@
     lv2:default 87.54 ;
     lv2:minimum 0.001 ;
     lv2:maximum 1000.0 ;
-    units:unit units:bpm .
+    units:unit units:bpm
   ] ;
 
   lv2:port [
     a lv2:InputPort , lv2:ControlPort ;
     lv2:index 3 ;
-    lv2:symbol "loop-length" ;
+    lv2:symbol "loop_length" ;
     lv2:name "Loop length"
     lv2:default 4 ;
     lv2:minimum 0.001 ;
     lv2:maximum 1000.0 ;
-    units:unit units:beat .
+    units:unit units:beat
   ] .
-
