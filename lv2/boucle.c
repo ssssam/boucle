@@ -142,17 +142,6 @@ run (LV2_Handle instance,
 	lv2_log_trace (&self->logger, "seconds per beat: %f, length in beats: %f, samplerate %lf, buffer length %zu\n",
 	    seconds_per_beat, loop_length_beats, self->samplerate, self->buffer_length);
 
-	/* Store the input into the buffer */
-	for (uint32_t pos = 0; pos < n_samples; pos++) {
-		self->buffer[self->record_head] = input[pos];
-
-		self->record_head ++;
-		if (self->record_head >= loop_length_samples) {
-			self->buffer_full = true;
-			self->record_head = 0;
-		}
-	}
-
 	if (self->buffer_full) {
 		/* Play back n_samples of the delay buffer */
 		for (uint32_t pos = 0; pos < n_samples; pos++) {
@@ -172,6 +161,17 @@ run (LV2_Handle instance,
 			if (self->play_head >= loop_length_samples) {
 				self->play_head = 0;
 			}
+		}
+	}
+
+	/* Store the input into the buffer */
+	for (uint32_t pos = 0; pos < n_samples; pos++) {
+		self->buffer[self->record_head] = input[pos];
+
+		self->record_head ++;
+		if (self->record_head >= loop_length_samples) {
+			self->buffer_full = true;
+			self->record_head = 0;
 		}
 	}
 
