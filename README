@@ -7,6 +7,33 @@ versioning](http://petermopar.blogspot.co.uk/2014/12/negative-versioning.html))
 
 Maximum lines of code: 5000
 
+## How to do it
+
+Build 4 testing:
+
+	mkdir build
+	mesonconf -Dprefix=`pwd`/../prefix
+	ninja-build install
+
+	# this should show you the plugins name
+	LV2_PATH=`pwd`/../prefix/lib64/lv2 lv2ls
+
+	# this should run it under jack
+	LV2_PATH=`pwd`/../prefix/lib64/lv2 jalv http://afuera.me.uk/boucle
+
+	# you can see the Boucle: ports in JACK now
+	jack_lsp
+
+	# generate a noise with JACK
+	jack_metro --bpm 500 &
+
+	jack_connect metro:500_bpm Boucle:in
+	jack_connect Boucle:out system:playback_1
+
+	# Ur noise comes out thru the plugin. It's horrible!
+
+You're welcome.
+
 ## Similar things
 
 [Ciat-Lonbarde Cocoquantus](http://ciat-lonbarde.net/cocoquantus/index.html)
