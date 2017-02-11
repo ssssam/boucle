@@ -34,6 +34,15 @@ Build 4 testing:
 
 You're welcome.
 
+Playing a BEAT:
+
+    # Looping playback of yer audio file to a jack port
+    gst-launch-1.0 multifilesrc \
+        location=`pwd`/examples/ibeat.org-j1s-SynthArpBuildLoop-97bpm.mp3 \
+        loop=true ! decodebin ! jacksink
+
+    # 
+
 ## Similar things
 
 [Ciat-Lonbarde Cocoquantus](http://ciat-lonbarde.net/cocoquantus/index.html)
@@ -47,3 +56,5 @@ You're welcome.
 [Roland Scooper](https://www.roland.com/global/products/scooper/) ([video](https://www.youtube.com/watch?v=l_e_IUgKlGQ))
 
 [The Finger](https://www.native-instruments.com/en/products/komplete/effects/the-finger/) ([video](https://www.youtube.com/watch?v=wrj6pkQloJM))
+
+[Vox Dynamic Looper](http://www.voxamps.com/vdl1)
