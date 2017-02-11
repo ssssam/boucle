@@ -12,6 +12,7 @@ Maximum lines of code: 5000
 Build 4 testing:
 
 	mkdir build
+	meson ..
 	mesonconf -Dprefix=`pwd`/../prefix
 	ninja-build install
 
@@ -36,12 +37,18 @@ You're welcome.
 
 Playing a BEAT:
 
-    # Looping playback of yer audio file to a jack port
+    # run the loopy looper
+    LV2_PATH=`pwd`/../prefix/lib64/lv2 jalv http://afuera.me.uk/boucle
+
+    # Looping playback of yer audio file to Boucle
     gst-launch-1.0 multifilesrc \
         location=`pwd`/examples/ibeat.org-j1s-SynthArpBuildLoop-97bpm.mp3 \
-        loop=true ! decodebin ! jacksink
+        loop=true ! mad ! audioresample ! audioconvert ! \
+      jackaudiosink client-name=demo port-pattern=Boucle:in
 
-    # 
+    jack_connect Boucle:out system:playback_1
+
+Hooray!
 
 ## Similar things
 
