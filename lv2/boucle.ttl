@@ -6,7 +6,7 @@
 
 <http://afuera.me.uk/boucle>
   a lv2:Plugin ;
-  lv2:project <http://www.github.com/ssssam/boucle> .
+  lv2:project <http://www.github.com/ssssam/boucle> ;
   doap:name "Boucle" ;
 
   lv2:port [

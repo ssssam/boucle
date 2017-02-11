@@ -3,5 +3,5 @@
 
 <http://afuera.me.uk/boucle>
   a lv2:Plugin ;
-  lv2:binary <boucle@LIB_EXT@> ;
+  lv2:binary <liblv2boucle.so> ;
   rdfs:seeAlso <boucle.ttl> .
