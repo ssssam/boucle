@@ -11,6 +11,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "ops.h"
+
 #define BOUCLE_URI "http://afuera.me.uk/boucle"
 
 /* Maximum memory usage: 11MB, based on 96KHz sample rate */
@@ -33,46 +35,6 @@ typedef enum {
 	PORT_TEMPO = 5
 } Port;
 
-typedef enum {
-	OP_TYPE_NONE = 0,
-	OP_TYPE_REVERSE = 1,
-	OP_TYPE_ABSOLUTE_JUMP = 2,
-	OP_TYPE_RELATIVE_JUMP = 3,
-	OP_TYPE_LOOP_IN_LOOP = 4,
-	OP_TYPE_SPEED_RAMP = 5
-} OpType;
-
-typedef struct {
-	OpType type;
-	uint32_t start;  /* in samples */
-	uint32_t duration;  /* in samples */
-	/* More custom stuff may follow */
-} Op;
-
-typedef struct {
-	Op op;
-} ReverseOp;
-
-typedef struct {
-	Op op;
-	uint32_t absolute_position;  /* in samples */
-} AbsoluteJumpOp;
-
-typedef struct {
-	Op op;
-	uint32_t relative_position;  /* in samples */
-} RelativeJumpOp;
-
-typedef struct {
-	Op op;
-	uint32_t loop_size;  /* in samples */
-} LoopInLoopOp;
-
-typedef struct {
-	Op op;
-	float start_speed;  /* coefficient */
-	float end_speed;  /* coefficient */
-} SpeedRampOp;
 
 #define MAX_OPS  256
 
