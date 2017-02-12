@@ -62,33 +62,30 @@ Tweakbench [Dropout](http://www.tweakbench.com/dropout) and [Yoink](http://www.t
 
 ## Architecture
 
-The core of Boucle is an [LV2](http://lv2plug.in/) plugin. This plugins is a
-delay buffer that can perform various transformations operation on its
-playhead.
+The core of Boucle is inside an [LV2](http://lv2plug.in/) plugin. This plugin
+provides a delay buffer and can perform various transformation operations on
+the position of playhead while playing from it.
 
-The operations are defined using the [LV2
-Atoms](http://lv2plug.in/ns/ext/atom/) extension. This gives a set of abstract
-privimites capable of defining streams of events, it's used as the basis for
-the [LV2 MIDI](http://lv2plug.in/ns/ext/midi) extension for example.
+The core has audio input and output ports, and a control port for sending
+transformation operations. The operations are defined using a custom protocol
+built on the [LV2 Atoms](http://lv2plug.in/ns/ext/atom/) extension.
 
-Boucle operations can't be described meaningfully using MIDI primitives, but
-there are various ways to map them to MIDI notes.
+The Boucle LV2 plugin also contains the MIDI bridge. This could theoretically
+be separated into a different plugin, but we would hit the issue that JACK
+doesn't understand LV2 Atom ports so it would be a pain in the ass trying to
+to link the MIDI bridge to the core plugin in most cases.
 
-The Boucle engine can theoretically be used as a plugin in any LV2 host, but
-since it uses a custom control protocol it probably needs to be used with a
-MIDI->Boucle control mapping.
+To make Boucle more "playable", the MIDI bridge handles tempo syncing so that
+it can map notes to things like "stutter for 1 beat".
 
-Its primary use case is to work live as a loop butcher, and tooling is provided
-to make this easier. Currently the only tooling is a command-line tool, but a
-graphical user interface would be welcome.
+Boucle's primary use case is to work live as a loop butcher, and tooling is
+provided to make this easier. Currently the only tooling is a command-line
+tool, but a graphical user interface would be welcome.
 
-There are various similar plugins which contain their own mini sequencers, but
-I don't like that so much. I would prefer if you could link up any
-sequencer you want
-([stepseq.lv2](https://github.com/x42/stepseq.lv2/)?
+Boucle could also work with a sequencer. There's no sequencer UI that
+currently supports generating Boucle events, but you can connect anything
+to the MIDI bridge ([stepseq.lv2](https://github.com/x42/stepseq.lv2/)?
 [Cythar](https://www.youtube.com/watch?v=gtM2DpA8Z54)?
 [Non](http://non.tuxfamily.org/wiki/index.php?page=Non%20Sequencer)?
-[Iannix](https://www.iannix.org/en/whatisiannix/)? to drive Boucle, or some
-[generative algortihm](http://www.flexatone.org/article/athenaFeatAlgo). There
-are probably none that can drive the custom control protocol, so we need thought
-on how to hook up MIDI inputs.
+[Iannix](https://www.iannix.org/en/whatisiannix/), even some
+[generative algorithm](http://www.flexatone.org/article/athenaFeatAlgo).

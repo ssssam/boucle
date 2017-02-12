@@ -29,6 +29,8 @@ typedef enum {
 	PORT_INPUT  = 1,
 	PORT_OUTPUT = 2,
 	PORT_LOOP_LENGTH = 3,
+	PORT_MIDI_BRIDGE = 4,
+	PORT_TEMPO = 5
 } Port;
 
 typedef enum {
@@ -89,10 +91,13 @@ typedef struct {
 	} uris;
 
 	/* LV2 connections */
-	const LV2_Atom_Sequence* midi_control;
+	const LV2_Atom_Sequence* control;
 	const float* input;
 	float* output;
 	const float* loop_length; /* in beats */
+
+	const LV2_Atom_Sequence* midi;
+	const float* tempo;  /* bpm */
 
 	/* Internals */
 	double samplerate;
@@ -131,8 +136,7 @@ static bool get_host_features (Boucle *self,
 	}
 
 	if (!self->map || !self->log) {
-		fprintf(stderr, "Boucle: buggy host -- required features not provided. "
-		                "Log feature: %p; map feature: %p", self->map, self->log);
+		fprintf(stderr, "Boucle: required features (map, log) not provided.\n");
 		return false;
 	} else {
 		return true;
@@ -186,7 +190,7 @@ connect_port (LV2_Handle instance,
 
 	switch ((Port)port) {
 		case PORT_BOUCLE_CONTROL:
-			self->midi_control = (const LV2_Atom_Sequence*)data;
+			self->control = (const LV2_Atom_Sequence*)data;
 			break;
 		case PORT_INPUT:
 			self->input = (const float*)data;
@@ -196,6 +200,12 @@ connect_port (LV2_Handle instance,
 			break;
 		case PORT_LOOP_LENGTH:
 			self->loop_length = (const float*)data;
+			break;
+		case PORT_MIDI_BRIDGE:
+			self->midi = (const LV2_Atom_Sequence*)data;
+			break;
+		case PORT_TEMPO:
+			self->tempo = (const float*)data;
 			break;
 		default:
 			lv2_log_warning (&self->logger, "Host tried to connect invalid port %i", port);
@@ -265,7 +275,7 @@ static void
 get_ops_from_midi (Boucle *self,
                    uint32_t max_op_length /* frames */)
 {
-	LV2_ATOM_SEQUENCE_FOREACH(self->midi_control, ev) {
+	LV2_ATOM_SEQUENCE_FOREACH(self->control, ev) {
 		if (ev->body.type == self->uris.midi_MidiEvent) {
 			const uint8_t* const msg = (const uint8_t*)(ev+1);
 			switch (lv2_midi_message_type (msg)) {

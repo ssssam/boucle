@@ -137,7 +137,10 @@ boucle:endSpeed
     rdfs:range xsd:decimal ;
     units:unit units:coef .
 
-# Boucle plugin description
+
+#############################
+# Boucle plugin description #
+#############################
 
 <http://afuera.me.uk/boucle>
   a lv2:Plugin , lv2:DelayPlugin ;
@@ -152,8 +155,8 @@ boucle:endSpeed
     atom:supports boucle:Operation ;
     lv2:designation lv2:control ;
     lv2:index 0;
-    lv2:symbol "control_midi" ;
-    lv2:name "MIDI Control"
+    lv2:symbol "control" ;
+    lv2:name "Boucle operation sequence"
   ] ;
 
   # Input audio (only mono)
@@ -187,4 +190,27 @@ boucle:endSpeed
     lv2:maximum 2880000.0 ;
     lv2:portProperty lv2:Integer ;
     units:unit units:frame
+  ] ;
+
+  # MIDI bridge
+
+  lv2:port [
+    a lv2:InputPort , atom:AtomPort ;
+    atom:bufferType atom:Sequence ;
+    atom:supports midi:MidiEvent ;
+    lv2:designation lv2:control ;
+    lv2:index 5 ;
+    lv2:symbol "midi_bridge" ;
+    lv2:name "MIDI bridge"
+  ] ;
+
+  lv2:port [
+    a lv2:InputPort , lv2:ControlPort ;
+    lv2:index 6 ;
+    lv2:symbol "tempo" ;
+    lv2:name "Tempo" ;
+    lv2:default 74.87 ;
+    lv2:minimum 0.0001 ;
+    lv2:maximum 1000.0 ;
+    units:unit units:bpm
   ] .
