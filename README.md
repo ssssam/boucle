@@ -24,11 +24,20 @@ Build 4 testing:
 	mesonconf -Dprefix=`pwd`/../prefix
 	ninja-build install
 
-Test that thing with a file as input.
+Test that thing with a file as input:
 
     LV2_PATH=`pwd`/../prefix/lib64/lv2 ../cli/boucle_cli.py \
-        --input ../examples/ibeat.org-j1s-SynthArpBuildLoop-97bpm.mp3
+        --input ../examples/ibeat.org-j1s-SynthArpBuildLoop-97bpm.mp3 \
+        --tempo=97 --loop-length=16
 
+Let's drive it with a virtual MIDI keyboard:
+
+    jack-keyboard &
+    LV2_PATH=`pwd`/../prefix/lib64/lv2 ../cli/boucle_cli.py \
+        --control jack-keyboard:midi_out \
+        --input ../examples/ibeat.org-j1s-SynthArpBuildLoop-97bpm.mp3 \
+        --tempo=97 --loop-length=16
+        
 Hooray!
 
 ## Similar things

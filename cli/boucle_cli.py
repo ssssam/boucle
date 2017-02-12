@@ -31,13 +31,14 @@ def argument_parser():
     parser = argparse.ArgumentParser(description="Boucle looper misbehaver CLI wrapper")
 
     parser.add_argument(
-            '--control', '-c', type=str, choices=['midi', 'random'], action='append',
-            help="what drives you? Default: midi and random.")
+            '--control', '-c', type=str, action='append',
+            help="a JACK MIDI input port, and/or 'random' for self playback")
 
     parser.add_argument(
             '--input', '-i', type=str, action='append',
-            help="a JACK port, or an audio file to loop. Default is to connect "
-                 "to all system:capture_* ports. Multiple inputs are allowed.")
+            help="a JACK audio port, or an audio file to loop. Default is to "
+                 "connect to all system:capture_* ports. Multiple inputs are "
+                 "allowed.")
     parser.add_argument(
             '--output', '-o', type=str, action='append',
             help="JACK port for audio output. Default is to connect to all "
@@ -131,7 +132,9 @@ def main():
 
     jack_client = jack.Client("boucle_cli")
 
-    args.control = args.control or ['midi', 'random']
+    args.control = args.control or ['random']
+    args.input = args.input or jack_client.get_ports(name_pattern="system:capture_.*")
+    args.output = args.output or jack_client.get_ports(name_pattern="system:playback_.*")
 
     if 'random' in args.control:
         jack_client.midi_outports.register("control_midi_out")
@@ -148,21 +151,23 @@ def main():
         subprocesses.append(plugin_process(plugin_params))
         await_jack_port(jack_client, "Boucle:in", timeout=5)
 
-        if args.input:
-            jack_input_ports = jack_client.get_ports(is_audio=True, is_input=True)
-            jack_input_port_names = [port.name for port in jack_input_ports]
-            for i in args.input:
-                if i in jack_input_port_names:
-                    jack_client.connect(input_port, "Boucle:in")
-                elif os.path.exists(i):
-                    Gst.init()
-                    gstreamer_pipelines.append(audio_file_play_loop(i, "Boucle:in"))
-                else:
-                    raise RuntimeError ("Invalid input %s. Please pass a valid JACK port "
-                                        "or audio file." % i)
-        else:
-            for input_port in jack_client.get_ports(name_pattern="system:capture_.*"):
-                jack_client.connect(input_port, "Boucle:in")
+        for c in args.control:
+            if c == 'random':
+                logging.warning("Random not yet implemented! :-(")
+            else:
+                jack_client.connect(c, "Boucle:control_midi")
+
+        jack_input_ports = jack_client.get_ports(is_audio=True, is_input=True)
+        jack_input_port_names = [port.name for port in jack_input_ports]
+        for i in args.input:
+            if isinstance(i, jack.Port) or i in jack_input_port_names:
+                jack_client.connect(i, "Boucle:in")
+            elif os.path.exists(i):
+                Gst.init()
+                gstreamer_pipelines.append(audio_file_play_loop(i, "Boucle:in"))
+            else:
+                raise RuntimeError ("Invalid input %s. Please pass a valid JACK port "
+                                    "or audio file." % i)
 
         # FIXME: we make no effort to ensure that the metronome is in sync with
         # any audio files that are playing. We should probably slave the
@@ -175,16 +180,10 @@ def main():
         else:
             click_port = None
 
-        if args.output:
-            for output_port in args.output:
-                jack_client.connect("Boucle:out", output_port)
-                if click_port:
-                    jack_client.connect(click_port, output_port)
-        else:
-            for output_port in jack_client.get_ports(name_pattern="system:playback_.*"):
-                jack_client.connect("Boucle:out", output_port)
-                if click_port:
-                    jack_client.connect(click_port, output_port)
+        for output_port in args.output:
+            jack_client.connect("Boucle:out", output_port)
+            if click_port:
+                jack_client.connect(click_port, output_port)
 
         signal.pause()
     finally:
