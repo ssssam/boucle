@@ -1,31 +1,49 @@
+@prefix atom:   <http://lv2plug.in/ns/ext/atom#> .
 @prefix doap:  <http://usefulinc.com/ns/doap#> .
 @prefix lv2:   <http://lv2plug.in/ns/lv2core#> .
+@prefix midi:   <http://lv2plug.in/ns/ext/midi#> .
 @prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix units: <http://lv2plug.in/ns/extensions/units#> .
+@prefix urid: <http://lv2plug.in/ns/ext/urid#> .
 
 <http://afuera.me.uk/boucle>
   a lv2:Plugin ;
   lv2:project <http://www.github.com/ssssam/boucle> ;
   doap:name "Boucle" ;
+  lv2:requiredFeature urid:map ;
 
+  # MIDI control messages.
+  lv2:port [
+    a lv2:InputPort , atom:AtomPort ;
+    atom:bufferType atom:Sequence ;
+    atom:supports midi:MidiEvent ;
+    lv2:designation lv2:control ;
+    lv2:index 0;
+    lv2:symbol "control_midi" ;
+    lv2:name "MIDI Control"
+  ] ;
+
+  # Input audio (only mono)
   lv2:port [
     a lv2:InputPort , lv2:AudioPort ;
-    lv2:index 0 ;
+    lv2:index 1 ;
     lv2:symbol "in" ;
     lv2:name "In"
   ] ;
 
+  # Output audio (only mono)
   lv2:port [
     a lv2:OutputPort , lv2:AudioPort ;
-    lv2:index 1 ;
+    lv2:index 2 ;
     lv2:symbol "out" ;
     lv2:name "Out"
   ] ;
 
+  # Tempo
   lv2:port [
     a lv2:InputPort , lv2:ControlPort ;
-    lv2:index 2 ;
+    lv2:index 3 ;
     lv2:symbol "tempo" ;
     lv2:name "Tempo"
     lv2:default 87.54 ;
@@ -34,9 +52,14 @@
     units:unit units:bpm
   ] ;
 
+  # Loop length (in beats)
+  #
+  # The maximum is not correct; actually the maximum loop length varies
+  # depending on the tempo. The loop length will be clipped to the actual
+  # buffer size that the plugin allocated.
   lv2:port [
     a lv2:InputPort , lv2:ControlPort ;
-    lv2:index 3 ;
+    lv2:index 4 ;
     lv2:symbol "loop_length" ;
     lv2:name "Loop length"
     lv2:default 4 ;
