@@ -17,6 +17,7 @@ from gi.repository import Gst
 import jack
 
 import argparse
+import logging
 import os
 import signal
 import subprocess
@@ -42,7 +43,11 @@ def argument_parser():
             help="JACK port for audio output. Default is to connect to all "
                  "system:playback_* ports. Multiple outputs are allowed.")
 
-    # These are either-or
+    parser.add_argument(
+            '--loop-length', '-l', default=8.0, type=float,
+            help="length of loop (beats)")
+
+    # These two are either-or
     parser.add_argument(
             '--tempo', '-t', default=49.58, type=float,
             help="tempo that we play at (beats per minute)")
@@ -51,7 +56,7 @@ def argument_parser():
             help="sync to MIDI input (requires --control=midi)")
 
     parser.add_argument(
-            '--click', '-l', default=False, action='store_true',
+            '--click', '-k', default=False, action='store_true',
             help="enable an audible click sound on each beat")
 
     # For random controller
@@ -62,13 +67,19 @@ def argument_parser():
     return parser
 
 
-def plugin_process():
+def plugin_process(plugin_params):
     '''Load the Boucle plugin.'''
 
     # It's ugly to just call out to `jalv` to do this, but it works. Perhaps in
     # future we could use this: https://github.com/moddevices/mod-host
 
-    process = subprocess.Popen(['jalv', BOUCLE_URL])
+    command = ['jalv']
+    for param, value in plugin_params.items():
+        command.extend(['-c', '%s=%s' % (param, value)])
+    command +=[BOUCLE_URL]
+
+    logging.info("Running plugin: " + ' '.join(command))
+    process = subprocess.Popen(command)
     return process
 
 
@@ -90,6 +101,7 @@ def audio_file_play_loop(path, jack_port):
 
 def await_jack_port(jack_client, port_name, timeout=None):
     start_time = time.time()
+    logging.info("Waiting for port %s to appear" % port_name);
     while True:
         try:
             jack_client.get_port_by_name(port_name)
@@ -101,6 +113,17 @@ def await_jack_port(jack_client, port_name, timeout=None):
                 raise RuntimeError("Port %s did not appear within %i seconds",
                         port_name, timeout)
             time.sleep(0.1)
+    logging.info("Port %s appeared after %f seconds", port_name, time.time() - start_time)
+
+
+def click_process(tempo):
+    '''Start a process to generate a click.'''
+
+    # Yes, again we cheat and use a program from jack-example-clients.
+
+    command = ['jack_metro', '--bpm', str(tempo)]
+    logging.info("Starting metronome: " + ' '.join(command))
+    return subprocess.Popen(command)
 
 
 def main():
@@ -116,8 +139,13 @@ def main():
     subprocesses = []
     gstreamer_pipelines = []
 
+    plugin_params = {
+        'tempo': args.tempo,
+        'loop_length': args.loop_length
+    }
+
     try:
-        subprocesses.append(plugin_process())
+        subprocesses.append(plugin_process(plugin_params))
         await_jack_port(jack_client, "Boucle:in", timeout=5)
 
         if args.input:
@@ -136,12 +164,27 @@ def main():
             for input_port in jack_client.get_ports(name_pattern="system:capture_.*"):
                 jack_client.connect(input_port, "Boucle:in")
 
+        # FIXME: we make no effort to ensure that the metronome is in sync with
+        # any audio files that are playing. We should probably slave the
+        # jackaudiosink and the metro to the JACK transport, then start the
+        # transport when both are ready.
+        if args.click:
+            click_port = 'metro:%s_bpm' % args.tempo
+            subprocesses.append(click_process(args.tempo))
+            await_jack_port(jack_client, click_port, timeout=5)
+        else:
+            click_port = None
+
         if args.output:
             for output_port in args.output:
                 jack_client.connect("Boucle:out", output_port)
+                if click_port:
+                    jack_client.connect(click_port, output_port)
         else:
             for output_port in jack_client.get_ports(name_pattern="system:playback_.*"):
                 jack_client.connect("Boucle:out", output_port)
+                if click_port:
+                    jack_client.connect(click_port, output_port)
 
         signal.pause()
     finally:
@@ -154,6 +197,7 @@ def main():
 
 
 try:
+    logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
     main()
 except RuntimeError as e:
     sys.stderr.write("%s\n" % e)
