@@ -16,6 +16,8 @@ Use cases:
  * Boucle can interact with a live instrument performance, although you will
    have to use a click if you want the beat to be particularly synced
  * glitching audio tracks in a DAW
+ * record 2 or more loops with stop/start controls and you have a new kinda
+   loop station
 
 Build 4 testing:
 
@@ -60,26 +62,33 @@ Tweakbench [Dropout](http://www.tweakbench.com/dropout) and [Yoink](http://www.t
 
 ## Architecture
 
-The core of Boucle is an [LV2](http://lv2plug.in/) plugin. This implements a
-beat-synchronised delay which can be synchronized and controlled over MIDI.
+The core of Boucle is an [LV2](http://lv2plug.in/) plugin. This plugins is a
+delay buffer that can perform various transformations operation on its
+playhead.
 
-The Boucle plugin can be used as-is inside an LV2 host, like the
-[http://ardour.org/](Ardour) audio sequencer. However, its primary use case is
-to work live, and tooling is provided to make this easier. Currently the only
-tooling is a command-line tool, but a graphical user interface would be
-welcome.
+The operations are defined using the [LV2
+Atoms](http://lv2plug.in/ns/ext/atom/) extension. This gives a set of abstract
+privimites capable of defining streams of events, it's used as the basis for
+the [LV2 MIDI](http://lv2plug.in/ns/ext/midi) extension for example.
+
+Boucle operations can't be described meaningfully using MIDI primitives, but
+there are various ways to map them to MIDI notes.
+
+The Boucle engine can theoretically be used as a plugin in any LV2 host, but
+since it uses a custom control protocol it probably needs to be used with a
+MIDI->Boucle control mapping.
+
+Its primary use case is to work live as a loop butcher, and tooling is provided
+to make this easier. Currently the only tooling is a command-line tool, but a
+graphical user interface would be welcome.
 
 There are various similar plugins which contain their own mini sequencers, but
-I don't like that so much. Feel free to use any kind of sequencer
-([Cythar](https://www.youtube.com/watch?v=gtM2DpA8Z54)?
+I don't like that so much. I would prefer if you could link up any
+sequencer you want
+([stepseq.lv2](https://github.com/x42/stepseq.lv2/)?
+[Cythar](https://www.youtube.com/watch?v=gtM2DpA8Z54)?
 [Non](http://non.tuxfamily.org/wiki/index.php?page=Non%20Sequencer)?
 [Iannix](https://www.iannix.org/en/whatisiannix/)? to drive Boucle, or some
-[generative algortihm](http://www.flexatone.org/article/athenaFeatAlgo) but
-let's not try and build such things in.[1]
-
-[1]. The downside to this approach is that most sequencers want to output
-musical notes, and mapping those to operations on a delay buffer is going to
-suck a bit. But the generic automation sequencing in DAWs is even less suited
-to driving Boucle so we'll have to try and map our ideas to notes, at least
-until the world decides to trade harmony for digital glitches. You'll know
-when that happens because I'll be out picking up old pianos.
+[generative algortihm](http://www.flexatone.org/article/athenaFeatAlgo). There
+are probably none that can drive the custom control protocol, so we need thought
+on how to hook up MIDI inputs.

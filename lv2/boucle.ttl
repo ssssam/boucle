@@ -1,23 +1,155 @@
 @prefix atom:   <http://lv2plug.in/ns/ext/atom#> .
+@prefix boucle: <http://afuera.me.uk/boucle/ns#> .
 @prefix doap:  <http://usefulinc.com/ns/doap#> .
 @prefix lv2:   <http://lv2plug.in/ns/lv2core#> .
 @prefix midi:   <http://lv2plug.in/ns/ext/midi#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix units: <http://lv2plug.in/ns/extensions/units#> .
 @prefix urid: <http://lv2plug.in/ns/ext/urid#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+#######################
+# Operations ontology #
+#######################
+
+<http://afuera.me.uk/boucle/ns>
+    a owl:Ontology ;
+    lv2:documentation """
+This ontology describes the basic set of primitive operations that the
+Boucle loop engine can be told to do.
+
+The loop engine is controlled by sending an atom:Sequence containing one
+or more boucle:Operation events. These describe transformations that get
+applied to the playhead position in the delay buffer.
+""" .
+
+boucle:Operation
+    a rdfs:Class , owl:Datatype ;
+    rdfs:label "Boucle Operation" ;
+    rdfs:subClassOf atom:Atom ;
+    lv2:documentation """
+An operation that temporarily modifies the behaviour of playhead as it
+reads the delay buffer.
+
+Every operation has a start time (given by atom:frameTime) and a
+boucle:duration. Some operations define additional required properties. They
+are serialized similarly to MIDI events and reuse some of the classes from
+the midi: ontology to describe this.
+
+All Boucle operations are temporary modifiers to the playhead, i.e. when all
+operations have finished the playhead will be in the same position that it
+would have been if no operations had happened. This means the processed loop
+always stays in time.
+
+""" .
+
+boucle:operationCode
+    a rdfs:Property, owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:label "code for a given operation" ;
+    rdfs:range midi:hexByte .
+
+boucle:duration
+    a rdf:Property , owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:label "Operation duration" ;
+    rdfs:domain boucle:Operation ;
+    rdfs:range xsd:decimal ;
+    units:unit units:frames .
+
+boucle:ReverseOperation
+    a rdfs:Class ;
+    rdfs:label "Reverse Operation" ;
+    boucle:operationCode "01"^^xsd:hexBinary ;
+    lv2:documentation """
+Playhead goes in reverse for the duration of the operation.
+""" .
+
+boucle:AbsoluteJumpOperation
+    a rdfs:Class
+    rdfs:label "Jump Operation (absolute)" ;
+    boucle:operationCode "02"^^xsd:hexBinary ;
+    lv2:documentation """
+Playhead jumps to the given boucle:absolutePosition, for the duration of the
+operation.
+""" .
+
+boucle:absolutePosition
+    a rdf:Property, owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:label "Absolute loop position to jump to (in frames)" ;
+    rdfs:domain boucle:AbsoluteJumpOperation ;
+    rdfs:range xsd:decimal ;
+    units:unit units:frames .
+
+boucle:RelativeJumpOperation
+    a rdfs:Class
+    rdfs:label "Jump Operation (relative)" ;
+    boucle:operationCode "03"^^xsd:hexBinary ;
+    lv2:documentation """
+Playhead jumps to the given boucle:relativePosition, for the duration of the
+operation.
+""" .
+
+boucle:relativePosition
+    a rdf:Property, owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:label "Relative loop position to jump to (in frames)" ;
+    rdfs:domain boucle:RelativeJumpOperation ;
+    rdfs:range xsd:decimal ;
+    units:unit units:frames .
+
+boucle:LoopInLoopOperation
+    a rdfs:Class
+    rdfs:label "Loop-in-loop Operation" ;
+    lv2:documentation """
+Playhead wraps back to event start every boucle:loopSize frames.
+
+I called this "loop in loop" to make it clear that it's a specific
+action. Every Boucle operation could be considered a "Loop operation", depending
+on your point of view.
+""" .
+
+boucle:loopSize
+    a rdf:Property, owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:label "Size of a nested loop" ;
+    rdfs:domain boucle:LoopInLoopOperation ;
+    rdfs:range xsd:decimal ;
+    units:unit units:frames .
+
+boucle:SpeedRampOperation
+    a rdfs:Class
+    rdfs:label "Speed Operation" ;
+    lv2:documentation """
+Playhead speed ramps from boucle:startSpeed to boucle:endSpeed over the
+duration of the event. No pitch correction is done.
+""" .
+
+boucle:startSpeed
+    a rdf:Property, owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:label "Start speed of a speed ramp operation" ;
+    rdfs:domain boucle:SpeedOperation ;
+    rdfs:range xsd:decimal ;
+    units:unit units:coef .
+
+boucle:endSpeed
+    a rdf:Property, owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:label "Final speed of a speed ramp operation" ;
+    rdfs:domain boucle:SpeedOperation ;
+    rdfs:range xsd:decimal ;
+    units:unit units:coef .
+
+# Boucle plugin description
 
 <http://afuera.me.uk/boucle>
-  a lv2:Plugin ;
+  a lv2:Plugin , lv2:DelayPlugin ;
   lv2:project <http://www.github.com/ssssam/boucle> ;
   doap:name "Boucle" ;
   lv2:requiredFeature urid:map ;
 
-  # MIDI control messages.
+  # Boucle control messages.
   lv2:port [
     a lv2:InputPort , atom:AtomPort ;
     atom:bufferType atom:Sequence ;
-    atom:supports midi:MidiEvent ;
+    atom:supports boucle:Operation ;
     lv2:designation lv2:control ;
     lv2:index 0;
     lv2:symbol "control_midi" ;
@@ -40,30 +172,19 @@
     lv2:name "Out"
   ] ;
 
-  # Tempo
   lv2:port [
     a lv2:InputPort , lv2:ControlPort ;
     lv2:index 3 ;
-    lv2:symbol "tempo" ;
-    lv2:name "Tempo"
-    lv2:default 87.54 ;
-    lv2:minimum 0.001 ;
-    lv2:maximum 1000.0 ;
-    units:unit units:bpm
-  ] ;
-
-  # Loop length (in beats)
-  #
-  # The maximum is not correct; actually the maximum loop length varies
-  # depending on the tempo. The loop length will be clipped to the actual
-  # buffer size that the plugin allocated.
-  lv2:port [
-    a lv2:InputPort , lv2:ControlPort ;
-    lv2:index 4 ;
     lv2:symbol "loop_length" ;
     lv2:name "Loop length"
     lv2:default 4 ;
-    lv2:minimum 0.001 ;
-    lv2:maximum 1000.0 ;
-    units:unit units:beat
+    # This is half the default block size that we get from JALV. Values
+    # this small are pretty pointless, but's useful for testing that nothing
+    # breaks if the loop is smaller than the block size.
+    lv2:minimum 512.0 ;
+    # This gives 60 seconds recording time at 48KHz, and requires about 11MB
+    # of RAM for the buffer.
+    lv2:maximum 2880000.0 ;
+    lv2:portProperty lv2:Integer ;
+    units:unit units:frame
   ] .

@@ -13,31 +13,64 @@
 
 #define BOUCLE_URI "http://afuera.me.uk/boucle"
 
-/* Maximum memory usage: 23MB, based on 96KHz sample rate */
-#define BUFFER_LIMIT  60 /* Seconds */
+/* Maximum memory usage: 11MB, based on 96KHz sample rate */
+#define BUFFER_LENGTH  60 * 48000 /* Frames */
 
 #define MIN(a,b) ({ __typeof__ (a) _a = (a); \
                __typeof__ (b) _b = (b); \
                _a < _b ? _a : _b; })
+#define MAX(a,b) ({ __typeof__ (a) _a = (a); \
+               __typeof__ (b) _b = (b); \
+               _a > _b ? _a : _b; })
+#define CLAMP(x,lo,hi) MIN(hi, MAX(lo, x))
 
 typedef enum {
-	PORT_MIDI_CONTROL = 0,
+	PORT_BOUCLE_CONTROL = 0,
 	PORT_INPUT  = 1,
 	PORT_OUTPUT = 2,
-	PORT_TEMPO = 3,
-	PORT_LOOP_LENGTH = 4,
+	PORT_LOOP_LENGTH = 3,
 } Port;
 
 typedef enum {
 	OP_TYPE_NONE = 0,
-	OP_TYPE_REVERSE = 1
+	OP_TYPE_REVERSE = 1,
+	OP_TYPE_ABSOLUTE_JUMP = 2,
+	OP_TYPE_RELATIVE_JUMP = 3,
+	OP_TYPE_LOOP_IN_LOOP = 4,
+	OP_TYPE_SPEED_RAMP = 5
 } OpType;
 
 typedef struct {
 	OpType type;
 	uint32_t start;  /* in samples */
 	uint32_t duration;  /* in samples */
+	/* More custom stuff may follow */
 } Op;
+
+typedef struct {
+	Op op;
+} ReverseOp;
+
+typedef struct {
+	Op op;
+	uint32_t absolute_position;  /* in samples */
+} AbsoluteJumpOp;
+
+typedef struct {
+	Op op;
+	uint32_t relative_position;  /* in samples */
+} RelativeJumpOp;
+
+typedef struct {
+	Op op;
+	uint32_t loop_size;  /* in samples */
+} LoopInLoopOp;
+
+typedef struct {
+	Op op;
+	float start_speed;  /* coefficient */
+	float end_speed;  /* coefficient */
+} SpeedRampOp;
 
 #define MAX_OPS  256
 
@@ -59,14 +92,12 @@ typedef struct {
 	const LV2_Atom_Sequence* midi_control;
 	const float* input;
 	float* output;
-	const float* tempo; /* bpm */
 	const float* loop_length; /* in beats */
 
 	/* Internals */
 	double samplerate;
 
 	float *buffer;
-	size_t buffer_length; /* in samples */
 	bool buffer_full;
 
 	size_t record_head; /* in samples */
@@ -132,12 +163,11 @@ instantiate (const LV2_Descriptor* descriptor,
 
 	self->samplerate = rate;
 
-	self->buffer_length = ceil (rate * BUFFER_LIMIT);
-	self->buffer = calloc (self->buffer_length, sizeof(float));
+	self->buffer = calloc (BUFFER_LENGTH, sizeof(float));
 
 	if (!self->buffer) {
 		lv2_log_error (&self->logger, "Unable to allocate buffer of %zu samples\n",
-		               self->buffer_length);
+		               BUFFER_LENGTH);
 		free (self);
 		return NULL;
 	}
@@ -155,7 +185,7 @@ connect_port (LV2_Handle instance,
 	Boucle* self = (Boucle*)instance;
 
 	switch ((Port)port) {
-		case PORT_MIDI_CONTROL:
+		case PORT_BOUCLE_CONTROL:
 			self->midi_control = (const LV2_Atom_Sequence*)data;
 			break;
 		case PORT_INPUT:
@@ -163,9 +193,6 @@ connect_port (LV2_Handle instance,
 			break;
 		case PORT_OUTPUT:
 			self->output = (float*)data;
-			break;
-		case PORT_TEMPO:
-			self->tempo = (const float*)data;
 			break;
 		case PORT_LOOP_LENGTH:
 			self->loop_length = (const float*)data;
@@ -181,7 +208,7 @@ activate (LV2_Handle instance)
 {
 	Boucle* self = (Boucle*)instance;
 
-	memset (self->buffer, 0, self->buffer_length * sizeof(float));
+	memset (self->buffer, 0, BUFFER_LENGTH * sizeof(float));
 }
 
 #define NO_OP -1
@@ -293,13 +320,8 @@ run (LV2_Handle instance,
 	const float* const input  = self->input;
 	float* const output = self->output;
 
-	const float tempo = *(self->tempo);
-	const float loop_length_beats = *(self->loop_length);
-
-	const float seconds_per_beat = 60.0f / tempo;
-	const size_t loop_length_samples = MIN (
-	    ceil (seconds_per_beat * loop_length_beats * self->samplerate),
-	    self->buffer_length);
+	const uint32_t loop_length_samples = CLAMP (
+	    *(self->loop_length), 512, BUFFER_LENGTH);
 
 	if (self->buffer_full) {
 		get_ops_from_midi (self, loop_length_samples);
