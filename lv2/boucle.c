@@ -12,11 +12,15 @@
 #include <stdlib.h>
 
 #include "ops.h"
+#include "op-heap.h"
 
 #define BOUCLE_URI "http://afuera.me.uk/boucle"
 
 /* Maximum memory usage: 11MB, based on 96KHz sample rate */
 #define BUFFER_LENGTH  60 * 48000 /* Frames */
+
+#define MAX_QUEUED_OPS 256
+#define MAX_ACTIVE_OPS 256
 
 #define MIN(a,b) ({ __typeof__ (a) _a = (a); \
                __typeof__ (b) _b = (b); \
@@ -25,6 +29,8 @@
                __typeof__ (b) _b = (b); \
                _a > _b ? _a : _b; })
 #define CLAMP(x,lo,hi) MIN(hi, MAX(lo, x))
+
+static void cleanup (LV2_Handle instance);
 
 typedef enum {
 	PORT_BOUCLE_CONTROL = 0,
@@ -35,8 +41,6 @@ typedef enum {
 	PORT_TEMPO = 5
 } Port;
 
-
-#define MAX_OPS  256
 
 typedef struct {
 	/* LV2 extensions */
@@ -74,13 +78,20 @@ typedef struct {
 
 	int n_active_notes;
 
-	/* This is a ring buffer; a linked list would be nice but we don't
-	 * want to be allocating memory while processing audio. This must
-	 * be ordered, and we should do some checking because no doubt I'll
-	 * introduce lots of bugs where it isn't over the coming months.
+	/* These heaps store ops that are waiting to be played, or are currently
+	 * active.
+	 *
+	 * We need two heaps of each type because our time wraps around back to
+	 * zero when we hit the end of the loop buffer. So it's not always true
+	 * that the earliest op we have to execute has the lowest timestamp.
+	 * By switching heaps whenever time wraps around, we can keep the heaps
+	 * ordered, and we just need to track which heap is older currently. This
+	 * does mean that the maximum duration for an operation is 2 x the loop
+	 * length.
 	 */
-	Op ops[MAX_OPS];
-	int n_ops, op_record_head, op_play_head;
+	OpHeap queued_ops[2];
+	OpHeap active_ops[2];
+	int primary_queue_heap, primary_active_heap;
 } Boucle;
 
 static bool get_host_features (Boucle *self,
@@ -112,6 +123,7 @@ instantiate (const LV2_Descriptor* descriptor,
              const LV2_Feature* const *features)
 {
 	Boucle* self = malloc (sizeof (Boucle));
+	bool ok = true;
 
 	if (!self)
 		return NULL;
@@ -136,6 +148,16 @@ instantiate (const LV2_Descriptor* descriptor,
 		               BUFFER_LENGTH);
 		free (self);
 		return NULL;
+	}
+
+	ok &= op_heap_init (&self->queued_ops[0], MAX_QUEUED_OPS);
+	ok &= op_heap_init (&self->queued_ops[1], MAX_QUEUED_OPS);
+	ok &= op_heap_init (&self->active_ops[0], MAX_ACTIVE_OPS);
+	ok &= op_heap_init (&self->active_ops[1], MAX_ACTIVE_OPS);
+
+	if (! ok) {
+		lv2_log_error (&self->logger, "Unable to allocate operation heaps.\n");
+		cleanup (self);
 	}
 
 	lv2_log_trace (&self->logger, "Successfully initialized Boucle plugin\n");
@@ -183,56 +205,28 @@ activate (LV2_Handle instance)
 	memset (self->buffer, 0, BUFFER_LENGTH * sizeof(float));
 }
 
-#define NO_OP -1
-
-/* Create a new operation, if there is space in the op buffer. */
-static int
-record_op (Boucle *self,
-           OpType type,
-           uint32_t start /* in samples */)
+static void
+queue_op (Boucle *self, Op op, uint32_t start)
 {
-	if (self->n_ops >= MAX_OPS)
-		return NO_OP;
-
-	self->n_ops ++;
-
-	int op_index = self->op_record_head;
-
-	if (++ self->op_record_head >= MAX_OPS)
-		self->op_record_head = 0;
-
-	self->ops[op_index].type = type;
-	self->ops[op_index].start = start;
-
-	return op_index;
-}
-
-static int
-get_last_recorded_op (Boucle *self)
-{
-	int active_op_index = self->op_record_head - 1;
-	if (active_op_index < 0)
-		active_op_index = MAX_OPS - 1;
-	return active_op_index;
+	OpHeap *queue = &self->queued_ops[self->primary_queue_heap];
+	op_heap_push (queue, op, start);
 }
 
 static void
-actioned_op (Boucle *self)
+pop_queued_op (Boucle *self)
 {
-	self->ops[self->op_play_head].type = OP_TYPE_NONE;
-	self->ops[self->op_play_head].start = 0;
-	self->ops[self->op_play_head].duration = 0;
-
-	if (++ self->op_play_head >= MAX_OPS)
-		self->op_play_head = 0;
-
-	self->n_ops --;
-
-	lv2_log_trace (&self->logger, "Actioned op; n_ops now %i, op play ptr %i\n",
-	        self->n_ops, self->op_play_head);
+	/* The secondary heap is older, so we should use that up first */
+	OpHeap *primary_queue = &self->queued_ops[self->primary_queue_heap];
+	OpHeap *secondary_queue = &self->queued_ops[1 - self->primary_queue_heap];
+	if (secondary_queue->count > 0) {
+		op_heap_pop (secondary_queue);
+	} else {
+		op_heap_pop (primary_queue);
+	}
 }
 
 /* Process the MIDI inputs to produce a list of operations. */
+#if 0
 static void
 get_ops_from_midi (Boucle *self,
                    uint32_t max_op_length /* frames */)
@@ -282,6 +276,7 @@ get_ops_from_midi (Boucle *self,
 		}
 	}
 }
+#endif
 
 static void
 run (LV2_Handle instance,
@@ -296,10 +291,39 @@ run (LV2_Handle instance,
 	    *(self->loop_length), 512, BUFFER_LENGTH);
 
 	if (self->buffer_full) {
-		get_ops_from_midi (self, loop_length_samples);
+/*		get_ops_from_midi (self, loop_length_samples);*/
 
-		/* Play back n_samples of the delay buffer */
+		/* FIXME: now you need to ....
+		 *  process the control stream and queue the events
+		 *  call the MIDI bridge and get events from there too
+		 */
+
+#if 0
 		for (uint32_t pos = 0; pos < n_samples; pos++) {
+			/* To do playback, we need to ...
+			 *
+			 *   set up an identity transform for the playhead
+			 *   check the queued_ops heaps for any new ops
+			 *      if any are found
+			 *        update the transform function
+			 *        push it to the active_ops queue
+			 *        pop it from the queued_ops queue
+			 *   check the active_ops heaps for any ops finishing
+			 *      if any are found
+			 *        update the transform function
+			 *        pop it from the active_ops queue
+			 *
+			 *   if the playhead wraps
+			 *      swap both heaps
+			 *
+			 * Since checking each heap is just a pointer lookup, we
+			 * can probably get away with doing it every time &
+			 * being sample-accurate. Doing it every 22us is overkill
+			 * though, probably at 48KHz doing it every 20 samples
+			 * would still be super accurate (accurate to 0.44ms...)
+			 */
+
+			/* Play back n_samples of the delay buffer */
 			if (self->reverser_offset > 0) {
 				/* Backwards playback */
 				int reversed_play_head = (self->play_head + self->reverser_offset) % loop_length_samples;
@@ -335,6 +359,7 @@ run (LV2_Handle instance,
 				self->play_head = 0;
 			}
 		}
+#endif
 	} else {
 		/* During the initial record, do passthrough. */
 		for (uint32_t pos = 0; pos < n_samples; pos++) {
@@ -364,15 +389,19 @@ run (LV2_Handle instance,
 
 static void
 deactivate (LV2_Handle instance) {
-	Boucle* self = (Boucle*)instance;
-
-	free (self->buffer);
-	self->buffer = NULL;
 }
 
 static void
 cleanup (LV2_Handle instance)
 {
+	Boucle* self = (Boucle*)instance;
+
+	op_heap_free (&self->queued_ops[0]);
+	op_heap_free (&self->queued_ops[1]);
+	op_heap_free (&self->active_ops[0]);
+	op_heap_free (&self->active_ops[1]);
+	free (self->buffer);
+
 	free (instance);
 }
 

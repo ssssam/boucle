@@ -6,6 +6,8 @@
 #ifndef __OPS_H__
 #define __OPS_H__
 
+#include <lv2/lv2plug.in/ns/lv2core/lv2.h>
+
 typedef enum {
 	OP_TYPE_NONE = 0,
 	OP_TYPE_REVERSE = 1,
