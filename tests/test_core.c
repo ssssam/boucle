@@ -100,6 +100,10 @@ void test_basic(const LilvPlugin* plugin) {
 	lilv_instance_free (instance);
 }
 
+/* Next test: generate a buffer that's a ramp from 0 to 1 over N samples;
+ * send appropriate reverse events; and see that it happens.
+ */
+
 int main() {
 	LV2_Log_Log lv2_log_impl = { NULL, test_lv2_log_printf, test_lv2_log_vprintf };
 	lv2_log_feature.data = &lv2_log_impl;
