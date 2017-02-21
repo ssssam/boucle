@@ -127,6 +127,11 @@ def click_process(tempo):
     return subprocess.Popen(command)
 
 
+def beats_to_samples(time_beats, tempo, samplerate):
+    seconds_per_beat = (1.0 / tempo) * 60.0
+    return time_beats * seconds_per_beat * samplerate
+
+
 def main():
     args = argument_parser().parse_args()
 
@@ -143,8 +148,8 @@ def main():
     gstreamer_pipelines = []
 
     plugin_params = {
+        'loop_length': beats_to_samples(args.loop_length, args.tempo, jack_client.samplerate),
         'tempo': args.tempo,
-        'loop_length': args.loop_length
     }
 
     try:
