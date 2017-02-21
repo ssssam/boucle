@@ -122,7 +122,7 @@ def click_process(tempo):
 
     # Yes, again we cheat and use a program from jack-example-clients.
 
-    command = ['jack_metro', '--bpm', str(tempo)]
+    command = ['jack_metro', '--amplitude', '0.05', '--duration', '20', '--bpm', str(tempo)]
     logging.info("Starting metronome: " + ' '.join(command))
     return subprocess.Popen(command)
 
