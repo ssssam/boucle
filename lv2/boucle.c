@@ -60,7 +60,7 @@ typedef struct {
 	const LV2_Atom_Sequence* control;
 	const float* input;
 	float* output;
-	const float* loop_length; /* in beats */
+	const float* loop_length; /* in frames (we're in mono, so 1 frame = 1 sample) */
 
 	const LV2_Atom_Sequence* midi;
 	const float* tempo;  /* bpm */
@@ -360,6 +360,15 @@ run (LV2_Handle instance,
 			}
 		}
 #endif
+		/* TEMPORARY: just play back the buffer */
+		for (uint32_t pos = 0; pos < n_samples; pos++) {
+			output[pos] = self->buffer[self->play_head];
+
+			self->play_head ++;
+			if (self->play_head >= loop_length_samples) {
+				self->play_head = 0;
+			}
+		}
 	} else {
 		/* During the initial record, do passthrough. */
 		for (uint32_t pos = 0; pos < n_samples; pos++) {
