@@ -13,6 +13,8 @@
 
 #include "ops.h"
 
+#include <stdbool.h>
+
 typedef struct {
 	int key;
 	Op op;
@@ -30,6 +32,6 @@ void op_heap_free (OpHeap *heap);
 bool op_heap_push (OpHeap *heap, Op op, int key);
 void op_heap_pop (OpHeap *heap);
 
-#define op_heap_front(h)  (h->data[0].op)
+#define op_heap_front(h)  ((h)->data[0].op)
 
 #endif

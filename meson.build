@@ -12,6 +12,8 @@ lv2 = dependency('lv2')
 
 lv2_install_path = join_paths(get_option('prefix'), get_option('libdir'), 'lv2')
 
+topinc = include_directories('.')
+
 subdir('src')
 subdir('gst')
 subdir('lv2')
