@@ -26,7 +26,7 @@ fn parse_args(args: &[String]) -> Result<(Box<dyn Read>, Box<dyn Read>, Box<dyn 
 
     let audio_out: Result<Box<dyn Write>, io::Error> = args.get(3).map_or(
         Ok(Box::new(io::stdout())),
-        |name| Ok(Box::new(File::open(name)?)));
+        |name| Ok(Box::new(File::create(name)?)));
 
     if audio_in.is_err() {
         return Err(audio_in.err().unwrap());
