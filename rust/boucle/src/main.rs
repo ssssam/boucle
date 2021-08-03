@@ -49,14 +49,24 @@ fn read_ops(file: &mut dyn Read) -> Result<String, io::Error> {
     return Ok(text);
 }
 
-fn process(samples: Vec<i32>) {
-    let frames_per_block = 16;
-    println!("Buffer is {} samples long", samples.len());
-    let blocks = samples.chunks(frames_per_block);
-    // FIXME: not handling frames yet, so this will only work for mono samples
-    blocks.for_each(|block| {
-        println!("Took {} samples", block.len());
-    });
+const FRAMES_PER_BLOCK: usize = 16;
+
+fn process_block(buffer: &Vec<i32>, position: usize) -> Vec<i32> {
+    println!("Processing block at position {}", position);
+    // Identity
+    let block = &buffer[position..position+FRAMES_PER_BLOCK];
+    return block.to_vec()
+}
+
+fn process(buffer: Vec<i32>) {
+    let buffer_size = buffer.len();
+    println!("Buffer is {} samples long", buffer_size);
+
+    let mut position = 0;
+    while position < buffer_size {
+        process_block(&buffer, position);
+        position += FRAMES_PER_BLOCK;
+    }
 }
 
 fn main() {
@@ -64,7 +74,7 @@ fn main() {
 
     let args: Vec<String> = env::args().collect();
 
-    let (mut operations, audio_in, audio_out) = parse_args(&args).expect("Failed to open args");
+    let (mut operations, audio_in, _audio_out) = parse_args(&args).expect("Failed to open args");
 
     let ops = read_ops(&mut operations).expect("Failed to read ops");
     println!("ops: {}", ops);
