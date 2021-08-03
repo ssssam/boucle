@@ -32,7 +32,7 @@ fn read_ops_from_file(filename: &str) -> Result<String, io::Error> {
     let mut text = String::new();
     file.read_to_string(&mut text)?;
     for line in text.lines() {
-        let op: Box<dyn ops::Op> = ops::new_from_string(line);
+        let op: Box<dyn ops::Op> = ops::new_from_string(line).expect("Failed to parse line");
         println!("{} = {:?}", line, op);
     }
     return Ok(text);
