@@ -49,6 +49,16 @@ fn read_ops(file: &mut dyn Read) -> Result<String, io::Error> {
     return Ok(text);
 }
 
+fn process(samples: Vec<i32>) {
+    let frames_per_block = 16;
+    println!("Buffer is {} samples long", samples.len());
+    let blocks = samples.chunks(frames_per_block);
+    // FIXME: not handling frames yet, so this will only work for mono samples
+    blocks.for_each(|block| {
+        println!("Took {} samples", block.len());
+    });
+}
+
 fn main() {
     println!("Boucle looper");
 
@@ -56,8 +66,12 @@ fn main() {
 
     let (mut operations, audio_in, audio_out) = parse_args(&args).expect("Failed to open args");
 
-    let mut reader = hound::WavReader::new(audio_in);
-
     let ops = read_ops(&mut operations).expect("Failed to read ops");
     println!("ops: {}", ops);
+
+    println!("Reading input...");
+    let mut reader = hound::WavReader::new(io::BufReader::new(audio_in)).unwrap(); //expect("Failed to read input");
+
+    let buffer: Vec<i32> = reader.samples::<i32>().map(|s| s.unwrap()).collect();
+    process(buffer);
 }
