@@ -1,9 +1,12 @@
 mod ops;
 
+use hound;
+
 use std::env;
 use std::fs::File;
 use std::io;
 use std::io::Read;
+use std::io::Write;
 
 /* IDEA:
  *
@@ -14,21 +17,29 @@ use std::io::Read;
  * e.g.
  */
 
-fn parse_args(args: &[String]) -> (&str, &str, &str) {
-    let operations_file = args.get(1).expect("No operations file given");
-    let audio_in = match args.get(2) {
-        None => "stdin",
-        Some(name) => name,
-    };
-    let audio_out = match args.get(2) {
-        None => "stdout",
-        Some(name) => name,
-    };
-    return (operations_file, audio_in, audio_out);
+fn parse_args(args: &[String]) -> Result<(Box<dyn Read>, Box<dyn Read>, Box<dyn Write>), io::Error> {
+    let operations = Box::new(File::open(args.get(1).expect("No operations file given"))?);
+
+    let audio_in: Result<Box<dyn Read>, io::Error> = args.get(2).map_or(
+        Ok(Box::new(io::stdin())),
+        |name| Ok(Box::new(File::open(name)?)));
+
+    let audio_out: Result<Box<dyn Write>, io::Error> = args.get(3).map_or(
+        Ok(Box::new(io::stdout())),
+        |name| Ok(Box::new(File::open(name)?)));
+
+    if audio_in.is_err() {
+        return Err(audio_in.err().unwrap());
+    }
+
+    if audio_out.is_err() {
+        return Err(audio_out.err().unwrap());
+    }
+
+    Ok((operations, audio_in.unwrap(), audio_out.unwrap()))
 }
 
-fn read_ops_from_file(filename: &str) -> Result<String, io::Error> {
-    let mut file: File = File::open(filename)?;
+fn read_ops(file: &mut dyn Read) -> Result<String, io::Error> {
     let mut text = String::new();
     file.read_to_string(&mut text)?;
     for line in text.lines() {
@@ -43,12 +54,10 @@ fn main() {
 
     let args: Vec<String> = env::args().collect();
 
-    let (operations_file, audio_in, audio_out) = parse_args(&args);
+    let (mut operations, audio_in, audio_out) = parse_args(&args).expect("Failed to open args");
 
-    println!("operations_file: {}", operations_file);
-    println!("audio_in: {}", audio_in);
-    println!("audio_out: {}", audio_out);
+    let mut reader = hound::WavReader::new(audio_in);
 
-    let ops = read_ops_from_file(operations_file).expect("Failed to read ops");
+    let ops = read_ops(&mut operations).expect("Failed to read ops");
     println!("ops: {}", ops);
 }
