@@ -77,6 +77,6 @@ fn main() {
     let mut writer = hound::WavWriter::create("output.wav", spec).unwrap();
 
     let mut boucle: Boucle = Boucle::new(boucle::Config::default());
-    boucle.process_buffer(&buffer, &mut |s| writer.write_sample(s).unwrap());
+    boucle.process_buffer(&buffer, &[], &mut |s| writer.write_sample(s).unwrap());
     writer.finalize().unwrap();
 }

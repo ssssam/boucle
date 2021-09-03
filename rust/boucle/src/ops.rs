@@ -4,33 +4,29 @@ use std::num;
 pub trait Op: fmt::Debug {
 }
 
+pub type OpSequence = [Box<dyn Op>];
+
 #[derive(Debug)]
 pub struct OpSpan {
-    start: u32,
-    duration: u32,
+    pub start: u32,
+    pub duration: u32,
 }
 
 #[derive(Debug)]
 pub struct ReverseOp {
-    span: OpSpan,
+    pub span: OpSpan,
 }
 
 #[derive(Debug)]
-pub struct AbsoluteJumpOp {
-    span: OpSpan,
-    absolute_position: u32,
-}
-
-#[derive(Debug)]
-pub struct RelativeJumpOp {
-    span: OpSpan,
-    relative_position: u32,
+pub struct JumpOp {
+    pub span: OpSpan,
+    pub offset: i32,
 }
 
 #[derive(Debug)]
 pub struct LoopInLoopOp {
-    span: OpSpan,
-    loop_size: u32,
+    pub span: OpSpan,
+    pub loop_size: u32,
 }
 
 #[derive(Debug)]
@@ -41,8 +37,7 @@ pub struct SpeedRampOp {
 }
 
 impl Op for ReverseOp { }
-impl Op for AbsoluteJumpOp { }
-impl Op for RelativeJumpOp { }
+impl Op for JumpOp { }
 impl Op for LoopInLoopOp { }
 impl Op for SpeedRampOp { }
 
@@ -80,13 +75,9 @@ pub fn new_from_string(line: &str) -> Result<Box<dyn Op>, ParseError>  {
         "reverse" => {
           Ok(Box::new(ReverseOp { span: span }))
         },
-        "absolute-jump" => {
-          let absolute_position = parts[3].parse::<u32>()?;
-          Ok(Box::new(AbsoluteJumpOp { span: span, absolute_position: absolute_position }))
-        },
-        "relative-jump" => {
-          let relative_position = parts[3].parse::<u32>()?;
-          Ok(Box::new(RelativeJumpOp { span: span, relative_position: relative_position }))
+        "jump" => {
+          let offset = parts[3].parse::<i32>()?;
+          Ok(Box::new(JumpOp { span: span, offset: offset }))
         },
         "loop_in_loop" => {
           let loop_size = parts[3].parse::<u32>()?;

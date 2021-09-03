@@ -1,8 +1,9 @@
+use crate::ops::*;
 
 pub type Sample = i32;
 
 pub struct Config {
-    frames_per_block: usize,
+    pub frames_per_block: usize,
 }
 
 impl Default for Config {
@@ -14,7 +15,7 @@ impl Default for Config {
 }
 
 pub struct Boucle {
-    config: Config
+    pub config: Config
 }
 
 impl Boucle {
@@ -22,13 +23,14 @@ impl Boucle {
         return Boucle { config: config }
     }
 
-    pub fn process_block(self: &Boucle, buffer: &[Sample], position: usize) -> Vec<Sample> {
-        assert_eq!(buffer.len(), self.config.frames_per_block);
-
+    pub fn process_block(self: &Boucle, buffer: &[Sample], ops: &OpSequence, position: usize) -> Vec<Sample> {
         println!("Processing block at position {}", position);
 
         // Identity
         //let block = &buffer[position..position+FRAMES_PER_BLOCK];
+
+        // Jump
+        // let block = &buffer[position+offset..position+offset+FRAMES_PER_BLOCK];
 
         // Reverse op
         let reverse_position = buffer.len() - position;
@@ -40,13 +42,13 @@ impl Boucle {
         return block;
     }
 
-    pub fn process_buffer(self: &Boucle, buffer: &[Sample], write_sample: &mut dyn FnMut(Sample)) {
+    pub fn process_buffer(self: &Boucle, buffer: &[Sample], ops: &OpSequence, write_sample: &mut dyn FnMut(Sample)) {
         let buffer_size = buffer.len();
-        println!("Buffer is {} samples long", buffer_size);
+        println!("Buffer is {} samples long, {} frames per block", buffer_size, self.config.frames_per_block);
 
         let mut position = 0;
         while position < buffer_size {
-            let block = self.process_block(&buffer, position);
+            let block = self.process_block(&buffer, ops, position);
             position += self.config.frames_per_block;
 
             for s in block {
