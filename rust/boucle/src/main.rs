@@ -50,15 +50,25 @@ fn read_ops(file: &mut dyn Read) -> Result<String, io::Error> {
 }
 
 const FRAMES_PER_BLOCK: usize = 16;
+type Sample = i32;
 
-fn process_block(buffer: &Vec<i32>, position: usize) -> Vec<i32> {
+fn process_block(buffer: &[Sample], position: usize) -> Vec<Sample> {
     println!("Processing block at position {}", position);
+
     // Identity
-    let block = &buffer[position..position+FRAMES_PER_BLOCK];
-    return block.to_vec()
+    //let block = &buffer[position..position+FRAMES_PER_BLOCK];
+
+    // Reverse op
+    let reverse_position = buffer.len() - position;
+
+    let mut block = vec![1; FRAMES_PER_BLOCK];
+    block.copy_from_slice(&buffer[reverse_position-FRAMES_PER_BLOCK..reverse_position]);
+    block.reverse();
+
+    return block;
 }
 
-fn process(buffer: Vec<i32>) {
+fn process(buffer: &[Sample]) {
     let buffer_size = buffer.len();
     println!("Buffer is {} samples long", buffer_size);
 
@@ -74,14 +84,14 @@ fn main() {
 
     let args: Vec<String> = env::args().collect();
 
-    let (mut operations, audio_in, _audio_out) = parse_args(&args).expect("Failed to open args");
+    let (mut operations_file, audio_in, _audio_out) = parse_args(&args).expect("Failed to open args");
 
-    let ops = read_ops(&mut operations).expect("Failed to read ops");
-    println!("ops: {}", ops);
+    let op_sequence = read_ops(&mut operations_file).expect("Failed to read ops");
+    println!("ops: {}", op_sequence);
 
     println!("Reading input...");
     let mut reader = hound::WavReader::new(io::BufReader::new(audio_in)).unwrap(); //expect("Failed to read input");
 
-    let buffer: Vec<i32> = reader.samples::<i32>().map(|s| s.unwrap()).collect();
-    process(buffer);
+    let buffer: Vec<Sample> = reader.samples::<Sample>().map(|s| s.unwrap()).collect();
+    process(&buffer);
 }
