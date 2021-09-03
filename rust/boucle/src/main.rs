@@ -1,5 +1,6 @@
 mod boucle;
 mod ops;
+mod tests;
 
 use boucle::*;
 

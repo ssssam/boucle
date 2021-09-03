@@ -22,7 +22,9 @@ impl Boucle {
         return Boucle { config: config }
     }
 
-    fn process_block(self: &Boucle, buffer: &[Sample], position: usize) -> Vec<Sample> {
+    pub fn process_block(self: &Boucle, buffer: &[Sample], position: usize) -> Vec<Sample> {
+        assert_eq!(buffer.len(), self.config.frames_per_block);
+
         println!("Processing block at position {}", position);
 
         // Identity
