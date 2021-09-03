@@ -68,14 +68,18 @@ fn process_block(buffer: &[Sample], position: usize) -> Vec<Sample> {
     return block;
 }
 
-fn process(buffer: &[Sample]) {
+fn process(buffer: &[Sample], write_sample: &mut dyn FnMut(Sample)) {
     let buffer_size = buffer.len();
     println!("Buffer is {} samples long", buffer_size);
 
     let mut position = 0;
     while position < buffer_size {
-        process_block(&buffer, position);
+        let block = process_block(&buffer, position);
         position += FRAMES_PER_BLOCK;
+
+        for s in block {
+            write_sample(s);
+        }
     }
 }
 
@@ -91,7 +95,15 @@ fn main() {
 
     println!("Reading input...");
     let mut reader = hound::WavReader::new(io::BufReader::new(audio_in)).unwrap(); //expect("Failed to read input");
+    let spec = reader.spec();
+
+    if spec.channels != 1 {
+        panic!("Input WAV file must be mono (got {} channels", spec.channels);
+    }
 
     let buffer: Vec<Sample> = reader.samples::<Sample>().map(|s| s.unwrap()).collect();
-    process(&buffer);
+
+    let mut writer = hound::WavWriter::create("output.wav", spec).unwrap();
+    process(&buffer, &mut |s| writer.write_sample(s).unwrap());
+    writer.finalize().unwrap();
 }
