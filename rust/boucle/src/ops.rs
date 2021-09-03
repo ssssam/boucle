@@ -1,42 +1,56 @@
+use crate::boucle::Sample;
+use crate::boucle::PositionInSamples;
+use crate::boucle::PositionInBlocks;
+
 use std::fmt;
 use std::num;
 
 pub trait Op: fmt::Debug {
-}
-
-pub type OpSequence = [Box<dyn Op>];
-
-#[derive(Debug)]
-pub struct OpSpan {
-    pub start: u32,
-    pub duration: u32,
+    // Identity transforms.
+    fn transform_position(self: &Self,
+                          block_start: &mut PositionInSamples,
+                          block_end: &mut PositionInSamples,
+                          buffer_end: PositionInSamples) {}
+    fn transform_block(self: &Self, block: &mut[Sample]) {}
 }
 
 #[derive(Debug)]
-pub struct ReverseOp {
-    pub span: OpSpan,
-}
+pub struct ReverseOp { }
 
 #[derive(Debug)]
 pub struct JumpOp {
-    pub span: OpSpan,
     pub offset: i32,
 }
 
 #[derive(Debug)]
 pub struct LoopInLoopOp {
-    pub span: OpSpan,
     pub loop_size: u32,
 }
 
 #[derive(Debug)]
 pub struct SpeedRampOp {
-    span: OpSpan,
     start_speed: f32,
     end_speed: f32,
 }
 
-impl Op for ReverseOp { }
+impl Op for ReverseOp {
+    fn transform_position(self: &Self,
+                          block_start: &mut PositionInSamples,
+                          block_end: &mut PositionInSamples,
+                          buffer_end: PositionInSamples) {
+        // Play backwards from block_start.
+        let block_length = *block_end - *block_start;
+        *block_end = *block_start;
+        *block_start = *block_end - block_length;
+        println!("reverse-op: Position now ({},{})", *block_start, *block_end);
+    }
+
+    fn transform_block(self: &Self, block: &mut[Sample]) {
+        block.reverse();
+        println!("reverse-op: Reverse block");
+    }
+}
+
 impl Op for JumpOp { }
 impl Op for LoopInLoopOp { }
 impl Op for SpeedRampOp { }
@@ -64,34 +78,32 @@ impl From<num::ParseIntError> for ParseError {
   }
 }
 
-pub fn new_from_string(line: &str) -> Result<Box<dyn Op>, ParseError>  {
+pub fn new_from_string(line: &str) -> Result<(PositionInBlocks, PositionInBlocks, Box<dyn Op>), ParseError> {
     let parts: Vec<&str> = line.split_ascii_whitespace().collect();
 
-    let start = parts[1].parse::<u32>()?;
-    let duration = parts[2].parse::<u32>()?;
-    let span = OpSpan { start: start, duration: duration };
+    let start = parts[1].parse::<PositionInBlocks>()?;
+    let duration = parts[2].parse::<PositionInBlocks>()?;
 
     match parts[0] {
         "reverse" => {
-          Ok(Box::new(ReverseOp { span: span }))
+          Ok((start, duration, Box::new(ReverseOp {})))
         },
         "jump" => {
           let offset = parts[3].parse::<i32>()?;
-          Ok(Box::new(JumpOp { span: span, offset: offset }))
+          Ok((start, duration, Box::new(JumpOp { offset: offset })))
         },
         "loop_in_loop" => {
           let loop_size = parts[3].parse::<u32>()?;
-          Ok(Box::new(LoopInLoopOp { span: span, loop_size: loop_size }))
+          Ok((start, duration, Box::new(LoopInLoopOp { loop_size: loop_size })))
         },
         "speed-ramp" => {
           let start_speed = parts[3].parse::<f32>()?;
           let end_speed = parts[4].parse::<f32>()?;
 
-          Ok(Box::new(SpeedRampOp {
-              span: span,
+          Ok((start, duration, Box::new(SpeedRampOp {
               start_speed: start_speed,
               end_speed: end_speed
-          }))
+          })))
         },
         _ => {
           Err(ParseError { message: format!("unknown operation '{}'", parts[0]) })

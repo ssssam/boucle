@@ -1,5 +1,6 @@
 mod boucle;
 mod ops;
+mod op_sequence;
 mod tests;
 
 use boucle::*;
@@ -47,12 +48,11 @@ fn read_ops(file: &mut dyn Read) -> Result<String, io::Error> {
     let mut text = String::new();
     file.read_to_string(&mut text)?;
     for line in text.lines() {
-        let op: Box<dyn ops::Op> = ops::new_from_string(line).expect("Failed to parse line");
+        let (start, duration, op) = ops::new_from_string(line).expect("Failed to parse line");
         println!("{} = {:?}", line, op);
     }
     return Ok(text);
 }
-
 
 fn main() {
     println!("Boucle looper");

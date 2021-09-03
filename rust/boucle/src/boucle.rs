@@ -1,6 +1,10 @@
 use crate::ops::*;
+use crate::op_sequence::*;
 
 pub type Sample = i32;
+
+pub type PositionInSamples = usize;
+pub type PositionInBlocks = usize;
 
 pub struct Config {
     pub frames_per_block: usize,
@@ -23,21 +27,34 @@ impl Boucle {
         return Boucle { config: config }
     }
 
-    pub fn process_block(self: &Boucle, buffer: &[Sample], ops: &OpSequence, position: usize) -> Vec<Sample> {
+    pub fn process_block(self: &Boucle, buffer: &[Sample], op_sequence: &OpSequence, position: PositionInSamples) -> Vec<Sample> {
         println!("Processing block at position {}", position);
 
+        let mut block_start = position;
+        let mut block_end = position + self.config.frames_per_block;
+
+        let block_position: PositionInBlocks = position / self.config.frames_per_block;
+
+        for entry in op_sequence {
+            if op_in_block(entry, block_position) {
+                entry.op.transform_position(&mut block_start, &mut block_end, buffer.len())
+            }
+        }
+
+        let block_length = block_end - block_start;
+        let mut block = vec![1; block_length];
+        block.copy_from_slice(&buffer[block_start..block_end]);
+
+        for entry in op_sequence {
+            if op_in_block(entry, block_position) {
+                entry.op.transform_block(&mut block)
+            }
+        }
         // Identity
         //let block = &buffer[position..position+FRAMES_PER_BLOCK];
 
         // Jump
         // let block = &buffer[position+offset..position+offset+FRAMES_PER_BLOCK];
-
-        // Reverse op
-        let reverse_position = buffer.len() - position;
-
-        let mut block = vec![1; self.config.frames_per_block];
-        block.copy_from_slice(&buffer[reverse_position-self.config.frames_per_block..reverse_position]);
-        block.reverse();
 
         return block;
     }
