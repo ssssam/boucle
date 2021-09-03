@@ -1,4 +1,7 @@
+mod boucle;
 mod ops;
+
+use boucle::*;
 
 use hound;
 
@@ -49,39 +52,6 @@ fn read_ops(file: &mut dyn Read) -> Result<String, io::Error> {
     return Ok(text);
 }
 
-const FRAMES_PER_BLOCK: usize = 16;
-type Sample = i32;
-
-fn process_block(buffer: &[Sample], position: usize) -> Vec<Sample> {
-    println!("Processing block at position {}", position);
-
-    // Identity
-    //let block = &buffer[position..position+FRAMES_PER_BLOCK];
-
-    // Reverse op
-    let reverse_position = buffer.len() - position;
-
-    let mut block = vec![1; FRAMES_PER_BLOCK];
-    block.copy_from_slice(&buffer[reverse_position-FRAMES_PER_BLOCK..reverse_position]);
-    block.reverse();
-
-    return block;
-}
-
-fn process(buffer: &[Sample], write_sample: &mut dyn FnMut(Sample)) {
-    let buffer_size = buffer.len();
-    println!("Buffer is {} samples long", buffer_size);
-
-    let mut position = 0;
-    while position < buffer_size {
-        let block = process_block(&buffer, position);
-        position += FRAMES_PER_BLOCK;
-
-        for s in block {
-            write_sample(s);
-        }
-    }
-}
 
 fn main() {
     println!("Boucle looper");
@@ -104,6 +74,8 @@ fn main() {
     let buffer: Vec<Sample> = reader.samples::<Sample>().map(|s| s.unwrap()).collect();
 
     let mut writer = hound::WavWriter::create("output.wav", spec).unwrap();
-    process(&buffer, &mut |s| writer.write_sample(s).unwrap());
+
+    let mut boucle: Boucle = Boucle::new(boucle::Config::default());
+    boucle.process_buffer(&buffer, &mut |s| writer.write_sample(s).unwrap());
     writer.finalize().unwrap();
 }
