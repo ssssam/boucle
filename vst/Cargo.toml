@@ -1,0 +1,11 @@
+[package]
+name = "vst"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+vst = "0.2.1"
+
+[lib]
+name = "boucle_vst"
+crate-type = ["cdylib"]
