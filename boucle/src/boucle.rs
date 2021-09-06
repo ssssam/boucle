@@ -50,11 +50,6 @@ impl Boucle {
                 entry.op.transform_block(&mut block)
             }
         }
-        // Identity
-        //let block = &buffer[position..position+FRAMES_PER_BLOCK];
-
-        // Jump
-        // let block = &buffer[position+offset..position+offset+FRAMES_PER_BLOCK];
 
         return block;
     }
