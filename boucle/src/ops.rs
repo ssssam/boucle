@@ -1,6 +1,6 @@
-use crate::boucle::Sample;
-use crate::boucle::PositionInSamples;
-use crate::boucle::PositionInBlocks;
+use crate::Sample;
+use crate::PositionInSamples;
+use crate::PositionInBlocks;
 
 use std::fmt;
 use std::num;
@@ -8,10 +8,10 @@ use std::num;
 pub trait Op: fmt::Debug {
     // Identity transforms.
     fn transform_position(self: &Self,
-                          block_start: &mut PositionInSamples,
-                          block_end: &mut PositionInSamples,
-                          buffer_end: PositionInSamples) {}
-    fn transform_block(self: &Self, block: &mut[Sample]) {}
+                          _block_start: &mut PositionInSamples,
+                          _block_end: &mut PositionInSamples,
+                          _buffer_end: PositionInSamples) {}
+    fn transform_block(self: &Self, _block: &mut[Sample]) {}
 }
 
 #[derive(Debug)]
@@ -37,7 +37,7 @@ impl Op for ReverseOp {
     fn transform_position(self: &Self,
                           block_start: &mut PositionInSamples,
                           block_end: &mut PositionInSamples,
-                          buffer_end: PositionInSamples) {
+                          _buffer_end: PositionInSamples) {
         // Play backwards from block_start.
         let block_length = *block_end - *block_start;
         *block_end = *block_start;

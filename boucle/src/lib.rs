@@ -1,10 +1,8 @@
-pub mod boucle;
 pub mod ops;
-mod op_sequence;
+pub mod op_sequence;
 mod tests;
 
-use ops::*;
-use op_sequence::*;
+pub use op_sequence::OpSequence;
 
 pub type Sample = i32;
 
@@ -41,7 +39,7 @@ impl Boucle {
         let block_position: PositionInBlocks = position / self.config.frames_per_block;
 
         for entry in op_sequence {
-            if op_in_block(entry, block_position) {
+            if op_sequence::op_in_block(entry, block_position) {
                 entry.op.transform_position(&mut block_start, &mut block_end, buffer.len())
             }
         }
@@ -51,7 +49,7 @@ impl Boucle {
         block.copy_from_slice(&buffer[block_start..block_end]);
 
         for entry in op_sequence {
-            if op_in_block(entry, block_position) {
+            if op_sequence::op_in_block(entry, block_position) {
                 entry.op.transform_block(&mut block)
             }
         }

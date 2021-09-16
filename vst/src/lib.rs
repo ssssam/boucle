@@ -1,6 +1,7 @@
 // VST2 plugin for Boucle.
 //
 // Following: https://vaporsoft.net/creating-an-audio-plugin-with-rust-vst/
+// Docs: https://docs.rs/vst/0.2.1/vst/
 
 #[macro_use]
 extern crate vst;
@@ -41,7 +42,7 @@ impl Plugin for BoucleVst {
     }
 
     fn process(&mut self, buffer: &mut AudioBuffer<VstSample>) {
-        let (input_buffer, mut output_buffer) = buffer.split();
+        let (_input_buffer, mut output_buffer) = buffer.split();
 
         for output_channel in output_buffer.into_iter() {
             for output_sample in output_channel {

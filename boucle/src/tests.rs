@@ -1,7 +1,3 @@
-use crate::boucle::*;
-use crate::ops::*;
-use crate::op_sequence::*;
-
 #[cfg(test)]
 
 const TEST_CONFIG: Config = Config { frames_per_block: 4 };

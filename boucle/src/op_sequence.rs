@@ -1,5 +1,7 @@
-use crate::boucle::PositionInBlocks;
+use crate::PositionInBlocks;
 use crate::ops::Op;
+
+use std::fmt;
 
 #[derive(Debug)]
 pub struct Entry {
@@ -8,8 +10,13 @@ pub struct Entry {
     pub op: Box<dyn Op>,
 }
 
-pub type OpSequence = [Entry];
-pub type OpSequenceVec = Vec<Entry>;
+impl fmt::Display for Entry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "({}->{}): {:?}", self.start, self.start + self.duration, self.op)
+    }
+}
+
+pub type OpSequence = Vec<Entry>;
 
 pub fn op_in_block(entry: &Entry, block_position: PositionInBlocks) -> bool {
     let result = block_position >= entry.start && block_position < (entry.start + entry.duration);
