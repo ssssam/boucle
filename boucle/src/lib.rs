@@ -1,5 +1,6 @@
 pub mod ops;
 pub mod op_sequence;
+pub mod patterns;
 mod tests;
 
 pub use op_sequence::OpSequence;
