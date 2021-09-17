@@ -1,7 +1,9 @@
 use crate::Sample;
 use crate::PositionInSamples;
 use crate::PositionInBlocks;
+use crate::OffsetInBlocks;
 
+use std::convert::TryFrom;
 use std::fmt;
 use std::num;
 
@@ -19,7 +21,7 @@ pub struct ReverseOp { }
 
 #[derive(Debug)]
 pub struct JumpOp {
-    pub offset: i32,
+    pub offset: OffsetInBlocks,
 }
 
 #[derive(Debug)]
@@ -51,7 +53,28 @@ impl Op for ReverseOp {
     }
 }
 
-impl Op for JumpOp { }
+// From https://stackoverflow.com/questions/54035728/how-to-add-a-negative-i32-number-to-an-usize-variable/54035801
+fn add(u: usize, i: i32) -> usize {
+    if i.is_negative() {
+        u - i.wrapping_abs() as u32 as usize
+    } else {
+        u + i as usize
+    }
+}
+
+impl Op for JumpOp {
+    fn transform_position(self: &Self,
+                          block_start: &mut PositionInSamples,
+                          block_end: &mut PositionInSamples,
+                          buffer_end: PositionInSamples) {
+        let block_length = i32::try_from(*block_end - *block_start).unwrap();
+
+        *block_start = add(*block_start, block_length * self.offset) % buffer_end;
+        *block_end = add(*block_end, block_length * self.offset) % buffer_end;
+        println!("jump-op: Position now ({},{})", *block_start, *block_end);
+    }
+}
+
 impl Op for LoopInLoopOp { }
 impl Op for SpeedRampOp { }
 
@@ -89,7 +112,7 @@ pub fn new_from_string(line: &str) -> Result<(PositionInBlocks, PositionInBlocks
           Ok((start, duration, Box::new(ReverseOp {})))
         },
         "jump" => {
-          let offset = parts[3].parse::<i32>()?;
+          let offset = parts[3].parse::<OffsetInBlocks>()?;
           Ok((start, duration, Box::new(JumpOp { offset: offset })))
         },
         "loop_in_loop" => {

@@ -8,6 +8,7 @@ pub type Sample = i32;
 
 pub type PositionInSamples = usize;
 pub type PositionInBlocks = usize;
+pub type OffsetInBlocks = i32;
 
 pub struct Config {
     pub frames_per_block: usize,
@@ -46,6 +47,7 @@ impl Boucle {
 
         let block_length = block_end - block_start;
         let mut block = vec![1; block_length];
+        println!("  copy {}..{}", block_start, block_end);
         block.copy_from_slice(&buffer[block_start..block_end]);
 
         for entry in op_sequence {
@@ -60,6 +62,10 @@ impl Boucle {
     pub fn process_buffer(self: &Boucle, buffer: &[Sample], ops: &OpSequence, write_sample: &mut dyn FnMut(Sample)) {
         let buffer_size = buffer.len();
         println!("Buffer is {} samples long, {} frames per block", buffer_size, self.config.frames_per_block);
+
+        if buffer_size % self.config.frames_per_block != 0 {
+            panic!("Buffer size must be a multiple of block size")
+        }
 
         let mut position = 0;
         while position < buffer_size {
