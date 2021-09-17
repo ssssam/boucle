@@ -41,7 +41,9 @@ impl Boucle {
 
         for entry in op_sequence {
             if op_sequence::op_in_block(entry, block_position) {
-                entry.op.transform_position(&mut block_start, &mut block_end, buffer.len())
+                entry.op.transform_position(&mut block_start, &mut block_end,
+                                            entry.start * self.config.frames_per_block,
+                                            buffer.len())
             }
         }
 

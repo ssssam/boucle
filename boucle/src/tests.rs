@@ -39,4 +39,19 @@ mod tests {
         boucle.process_buffer(&input, &ops, &mut |s| output.push(s));
         assert_eq!(output, expected_output);
     }
+
+    #[test]
+    fn basic_repeat() {
+        let boucle: Boucle = Boucle::new(TEST_CONFIG);
+        let input = vec!(1,2,3,4, 5,6,7,8, 9,10,11,12, 13,14,15,16, 17,18,19,20, 21,22,23,24);
+
+        let ops: OpSequence = vec!(
+            op_sequence::Entry { start: 0, duration: 5, op: Box::new(ops::RepeatOp { loop_size: 2}) },
+        );
+        let expected_output = vec!(1,2,3,4, 5,6,7,8, 1,2,3,4, 5,6,7,8, 1,2,3,4, 21,22,23,24);
+
+        let mut output: Vec<Sample> = Vec::new();
+        boucle.process_buffer(&input, &ops, &mut |s| output.push(s));
+        assert_eq!(output, expected_output);
+    }
 }

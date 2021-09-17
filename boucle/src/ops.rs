@@ -12,6 +12,7 @@ pub trait Op: fmt::Debug {
     fn transform_position(self: &Self,
                           _block_start: &mut PositionInSamples,
                           _block_end: &mut PositionInSamples,
+                          _op_start: PositionInSamples,
                           _buffer_end: PositionInSamples) {}
     fn transform_block(self: &Self, _block: &mut[Sample]) {}
 }
@@ -25,8 +26,8 @@ pub struct JumpOp {
 }
 
 #[derive(Debug)]
-pub struct LoopInLoopOp {
-    pub loop_size: u32,
+pub struct RepeatOp {
+    pub loop_size: PositionInBlocks,
 }
 
 #[derive(Debug)]
@@ -39,6 +40,7 @@ impl Op for ReverseOp {
     fn transform_position(self: &Self,
                           block_start: &mut PositionInSamples,
                           block_end: &mut PositionInSamples,
+                          _op_start: PositionInSamples,
                           _buffer_end: PositionInSamples) {
         // Play backwards from block_start.
         let block_length = *block_end - *block_start;
@@ -66,6 +68,7 @@ impl Op for JumpOp {
     fn transform_position(self: &Self,
                           block_start: &mut PositionInSamples,
                           block_end: &mut PositionInSamples,
+                          _op_start: PositionInSamples,
                           buffer_end: PositionInSamples) {
         let block_length = i32::try_from(*block_end - *block_start).unwrap();
 
@@ -75,7 +78,29 @@ impl Op for JumpOp {
     }
 }
 
-impl Op for LoopInLoopOp { }
+impl Op for RepeatOp {
+    fn transform_position(self: &Self,
+                          block_start: &mut PositionInSamples,
+                          block_end: &mut PositionInSamples,
+                          op_start: PositionInSamples,
+                          _buffer_end: PositionInSamples) {
+        let block_length = *block_end - *block_start;
+
+        let blocks_since_loop_started = (*block_start - op_start) / block_length;
+        let offset = if blocks_since_loop_started >= self.loop_size {
+            blocks_since_loop_started - (blocks_since_loop_started % self.loop_size)
+        } else {
+            0
+        };
+        println!("repeat-op: {} blocks since loop started, loop size {}: go back {}",
+                 blocks_since_loop_started, self.loop_size, offset);
+
+        *block_start = *block_start - (block_length * offset);
+        *block_end = *block_end - (block_length * offset);
+        println!("repeat-op: Position now ({},{})", *block_start, *block_end);
+    }
+}
+
 impl Op for SpeedRampOp { }
 
 #[derive(Debug)]
@@ -115,9 +140,9 @@ pub fn new_from_string(line: &str) -> Result<(PositionInBlocks, PositionInBlocks
           let offset = parts[3].parse::<OffsetInBlocks>()?;
           Ok((start, duration, Box::new(JumpOp { offset: offset })))
         },
-        "loop_in_loop" => {
-          let loop_size = parts[3].parse::<u32>()?;
-          Ok((start, duration, Box::new(LoopInLoopOp { loop_size: loop_size })))
+        "repeat" => {
+          let loop_size = parts[3].parse::<PositionInBlocks>()?;
+          Ok((start, duration, Box::new(RepeatOp { loop_size: loop_size })))
         },
         "speed-ramp" => {
           let start_speed = parts[3].parse::<f32>()?;
