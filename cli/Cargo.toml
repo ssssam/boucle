@@ -7,4 +7,5 @@ edition = "2018"
 
 [dependencies]
 boucle = { path = "../boucle" }
+clap = "2"
 hound = "3.4.0"
