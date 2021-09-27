@@ -5,6 +5,7 @@ use boucle::OpSequence;
 
 use clap::{Arg, App};
 use hound;
+use midir;
 
 use std::fs::File;
 use std::io;
@@ -26,12 +27,20 @@ fn read_ops(file_name: &str) -> Result<OpSequence, io::Error> {
 fn main() {
     let matches = App::new("Boucle looper")
         .version("1.0")
-        .arg(Arg::with_name("INPUT")
-             .required(true)
-             .index(1))
-        .arg(Arg::with_name("OUTPUT")
-             .required(true)
-             .index(2))
+        .subcommand(App::new("live")
+            .arg(Arg::with_name("INPUT")
+                 .required(true)
+                 .index(1))
+            .arg(Arg::with_name("OUTPUT")
+                 .required(true)
+                 .index(2)))
+        .subcommand(App::new("batch")
+            .arg(Arg::with_name("INPUT")
+                 .required(true)
+                 .index(1))
+            .arg(Arg::with_name("OUTPUT")
+                 .required(true)
+                 .index(2)))
         .get_matches();
 
     let audio_in = matches.value_of("INPUT").unwrap();
