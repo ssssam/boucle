@@ -5,12 +5,12 @@ use boucle::OpSequence;
 
 use clap::{Arg, App};
 use hound;
-use midir;
+use midir::{MidiInput, Ignore};
 
+use std::error::Error;
 use std::fs::File;
 use std::io;
 use std::io::Read;
-use std::io::Write;
 
 fn read_ops(file_name: &str) -> Result<OpSequence, io::Error> {
     let mut text = String::new();
@@ -24,30 +24,7 @@ fn read_ops(file_name: &str) -> Result<OpSequence, io::Error> {
     return Ok(op_sequence);
 }
 
-fn main() {
-    let matches = App::new("Boucle looper")
-        .version("1.0")
-        .subcommand(App::new("live")
-            .arg(Arg::with_name("INPUT")
-                 .required(true)
-                 .index(1))
-            .arg(Arg::with_name("OUTPUT")
-                 .required(true)
-                 .index(2)))
-        .subcommand(App::new("batch")
-            .arg(Arg::with_name("INPUT")
-                 .required(true)
-                 .index(1))
-            .arg(Arg::with_name("OUTPUT")
-                 .required(true)
-                 .index(2)))
-        .get_matches();
-
-    let audio_in = matches.value_of("INPUT").unwrap();
-    let audio_out = matches.value_of("OUTPUT").unwrap();
-
-    let operations_file = "ops.test";
-
+fn run_batch(audio_in: &str, audio_out: &str, operations_file: &str) {
     let op_sequence = read_ops(&operations_file).expect("Failed to read ops");
     for op in &op_sequence {
         println!("{}", op);
@@ -68,4 +45,53 @@ fn main() {
     let boucle: boucle::Boucle = boucle::Boucle::new(boucle::Config::default());
     boucle.process_buffer(&buffer, &op_sequence, &mut |s| writer.write_sample(s).unwrap());
     writer.finalize().unwrap();
+}
+
+fn list_ports() -> Result<(), Box<dyn Error>> {
+    let mut midi_in = MidiInput::new("boucle input")?;
+    midi_in.ignore(Ignore::None);
+
+    println!("Available MIDI input ports:");
+    for (i, p) in midi_in.ports().iter().enumerate() {
+        println!("{}: {}", i, midi_in.port_name(p)?);
+    }
+
+    return Ok(())
+}
+
+fn main() {
+    let app_m = App::new("Boucle looper")
+        .version("1.0")
+        .subcommand(App::new("live")
+            .arg(Arg::with_name("INPUT")
+                 .required(true)
+                 .index(1))
+            .arg(Arg::with_name("OUTPUT")
+                 .required(true)
+                 .index(2)))
+        .subcommand(App::new("batch")
+            .arg(Arg::with_name("INPUT")
+                 .required(true)
+                 .index(1))
+            .arg(Arg::with_name("OUTPUT")
+                 .required(true)
+                 .index(2)))
+        .subcommand(App::new("list-ports"))
+        .get_matches();
+
+    match app_m.subcommand() {
+        ("batch", Some(sub_m)) => {
+            let audio_in = sub_m.value_of("INPUT").unwrap();
+            let audio_out = sub_m.value_of("OUTPUT").unwrap();
+            let operations_file = "ops.test";
+            run_batch(audio_in, audio_out, operations_file);
+        },
+        ("live", Some(_)) => {
+            unreachable!();
+        },
+        ("list-ports", Some(_)) => {
+            list_ports().unwrap();
+        },
+        _ => unreachable!()
+    }
 }
