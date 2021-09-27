@@ -10,7 +10,8 @@ use midir::{MidiInput, Ignore};
 use std::error::Error;
 use std::fs::File;
 use std::io;
-use std::io::Read;
+use std::io::Read;use std::thread::sleep;
+use std::time::Duration;
 
 fn read_ops(file_name: &str) -> Result<OpSequence, io::Error> {
     let mut text = String::new();
@@ -47,6 +48,23 @@ fn run_batch(audio_in: &str, audio_out: &str, operations_file: &str) {
     writer.finalize().unwrap();
 }
 
+fn run_live(midi_in_port: i32) -> Result<(), Box<dyn Error>> {
+    let mut midi_in = MidiInput::new("boucle input")?;
+    midi_in.ignore(Ignore::None);
+
+    let port = &midi_in.ports()[midi_in_port as usize];
+    let in_port_name = midi_in.port_name(&port)?;
+
+    midi_in.connect(&port, &in_port_name,
+                    |ts, msg, _data| { println!("{}, {:?}", ts, msg) },
+                    ())?;
+
+    loop {
+         sleep(Duration::from_millis(4 * 150));
+    };
+    return Ok(())
+}
+
 fn list_ports() -> Result<(), Box<dyn Error>> {
     let mut midi_in = MidiInput::new("boucle input")?;
     midi_in.ignore(Ignore::None);
@@ -66,9 +84,8 @@ fn main() {
             .arg(Arg::with_name("INPUT")
                  .required(true)
                  .index(1))
-            .arg(Arg::with_name("OUTPUT")
-                 .required(true)
-                 .index(2)))
+            .arg(Arg::with_name("midi-port")
+                 .short("p")))
         .subcommand(App::new("batch")
             .arg(Arg::with_name("INPUT")
                  .required(true)
@@ -86,8 +103,10 @@ fn main() {
             let operations_file = "ops.test";
             run_batch(audio_in, audio_out, operations_file);
         },
-        ("live", Some(_)) => {
-            unreachable!();
+        ("live", Some(sub_m)) => {
+            let midi_port: i32 = sub_m.value_of("midi-port").unwrap_or("0").
+                                    parse::<i32>().unwrap();
+            run_live(midi_port).unwrap();
         },
         ("list-ports", Some(_)) => {
             list_ports().unwrap();
