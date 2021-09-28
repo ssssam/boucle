@@ -5,9 +5,8 @@ use boucle::OpSequence;
 
 use clap::{Arg, App};
 use hound;
-use midir::{MidiInput, Ignore};
+use portmidi::{PortMidi};
 
-use std::error::Error;
 use std::fs::File;
 use std::io;
 use std::io::Read;use std::thread::sleep;
@@ -48,30 +47,30 @@ fn run_batch(audio_in: &str, audio_out: &str, operations_file: &str) {
     writer.finalize().unwrap();
 }
 
-fn run_live(midi_in_port: i32) -> Result<(), Box<dyn Error>> {
-    let mut midi_in = MidiInput::new("boucle input")?;
-    midi_in.ignore(Ignore::None);
+fn run_live(midi_in_port: i32) -> Result<(), portmidi::Error> {
+    let context = PortMidi::new()?;
 
-    let port = &midi_in.ports()[midi_in_port as usize];
-    let in_port_name = midi_in.port_name(&port)?;
+    let info = context.device(midi_in_port)?;
+    let in_port = context.input_port(info, 1024)?;
 
-    midi_in.connect(&port, &in_port_name,
-                    |ts, msg, _data| { println!("{}, {:?}", ts, msg) },
-                    ())?;
+    while let Ok(_) = in_port.poll() {
+        if let Ok(Some(event)) = in_port.read_n(1024) {
+            println!("{:?}", event);
+        }
+        // there is no blocking receive method in PortMidi, therefore
+        // we have to sleep some time to prevent a busy-wait loop
+         sleep(Duration::from_millis(10));
+    }
 
-    loop {
-         sleep(Duration::from_millis(4 * 150));
-    };
     return Ok(())
 }
 
-fn list_ports() -> Result<(), Box<dyn Error>> {
-    let mut midi_in = MidiInput::new("boucle input")?;
-    midi_in.ignore(Ignore::None);
+fn run_list_ports() -> Result<(), portmidi::Error> {
+    let context = PortMidi::new()?;
 
     println!("Available MIDI input ports:");
-    for (i, p) in midi_in.ports().iter().enumerate() {
-        println!("{}: {}", i, midi_in.port_name(p)?);
+    for dev in context.devices()? {
+        println!("{}\n", dev);
     }
 
     return Ok(())
@@ -113,7 +112,7 @@ fn main() {
             run_live(midi_port).unwrap();
         },
         ("list-ports", Some(_)) => {
-            list_ports().unwrap();
+            run_list_ports().unwrap();
         },
         _ => unreachable!()
     }
