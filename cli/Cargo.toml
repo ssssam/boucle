@@ -8,5 +8,6 @@ edition = "2018"
 [dependencies]
 boucle = { path = "../boucle" }
 clap = "2"
+cpal = "^0.13"
 hound = "3.4.0"
 portmidi = "^0.2"

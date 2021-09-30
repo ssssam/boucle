@@ -4,6 +4,7 @@ use boucle::Sample;
 use boucle::OpSequence;
 
 use clap::{Arg, App};
+use cpal::traits::{DeviceTrait, HostTrait};
 use hound;
 use portmidi::{PortMidi};
 
@@ -47,14 +48,48 @@ fn run_batch(audio_in: &str, audio_out: &str, operations_file: &str) {
     writer.finalize().unwrap();
 }
 
+fn get_audio_config(device: &cpal::Device) -> cpal::SupportedStreamConfig {
+    let mut supported_configs_range = device.supported_output_configs()
+        .expect("error while querying configs");
+    let supported_config = supported_configs_range.next()
+        .expect("no supported config")
+        .with_sample_rate(cpal::SampleRate(44100));
+    println!("audio config: {:?}", supported_config);
+    return supported_config;
+}
+
+fn write_silence<T: cpal::Sample>(data: &mut [T], _: &cpal::OutputCallbackInfo) {
+    for sample in data.iter_mut() {
+        *sample = cpal::Sample::from(&0.0);
+    }
+}
+
+fn open_out_stream<T: cpal::Sample + 'static>(device: cpal::Device, config: cpal::StreamConfig) -> Box<cpal::Stream> {
+    return Box::new(device.build_output_stream(
+        &config, write_silence::<T>, move |err| { println!("{}", err) }
+    ).unwrap());
+}
+
 fn run_live(midi_in_port: i32) -> Result<(), portmidi::Error> {
-    let context = PortMidi::new()?;
+    let midi_context = PortMidi::new()?;
+    let midi_info = midi_context.device(midi_in_port)?;
+    let midi_in_port = midi_context.input_port(midi_info, 1024)?;
 
-    let info = context.device(midi_in_port)?;
-    let in_port = context.input_port(info, 1024)?;
+    let audio_host = cpal::default_host();
+    let audio_out_device = audio_host.default_output_device()
+        .expect("no output device available");
+    let audio_config = get_audio_config(&audio_out_device);
 
-    while let Ok(_) = in_port.poll() {
-        if let Ok(Some(event)) = in_port.read_n(1024) {
+    let audio_out_stream = match audio_config.sample_format() {
+        cpal::SampleFormat::F32 => open_out_stream::<f32>(audio_out_device, audio_config.into()),
+        cpal::SampleFormat::I16 => open_out_stream::<i16>(audio_out_device, audio_config.into()),
+        cpal::SampleFormat::U16 => open_out_stream::<u16>(audio_out_device, audio_config.into()),
+    };
+
+    //audio_out_stream.play().unwrap();
+
+    while let Ok(_) = midi_in_port.poll() {
+        if let Ok(Some(event)) = midi_in_port.read_n(1024) {
             println!("{:?}", event);
         }
         // there is no blocking receive method in PortMidi, therefore
