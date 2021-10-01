@@ -9,5 +9,6 @@ edition = "2018"
 boucle = { path = "../boucle" }
 clap = "2"
 cpal = "^0.13"
+dasp = "^0.11"
 hound = "3.4.0"
 portmidi = "^0.2"
