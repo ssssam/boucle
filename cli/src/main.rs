@@ -1,10 +1,10 @@
 use boucle;
 use boucle::op_sequence;
-use boucle::Sample;
 use boucle::OpSequence;
 
 use clap::{Arg, App};
 use cpal::traits::{DeviceTrait, HostTrait};
+use dasp::{Sample};
 use hound;
 use portmidi::{PortMidi};
 
@@ -25,23 +25,47 @@ fn read_ops(file_name: &str) -> Result<OpSequence, io::Error> {
     return Ok(op_sequence);
 }
 
-fn run_batch(audio_in: &str, audio_out: &str, operations_file: &str) {
-    let op_sequence = read_ops(&operations_file).expect("Failed to read ops");
-    for op in &op_sequence {
-        println!("{}", op);
-    }
-
-    println!("Reading input...");
-    let mut reader = hound::WavReader::open(audio_in).unwrap(); //expect("Failed to read input");
+fn input_wav_to_buffer(audio_in_path: &str) -> Result<boucle::Buffer, hound::Error> {
+    let mut reader = hound::WavReader::open(audio_in_path)?;
     let spec = reader.spec();
 
     if spec.channels != 1 {
         panic!("Input WAV file must be mono (got {} channels", spec.channels);
     }
 
-    let buffer: Vec<Sample> = reader.samples::<Sample>().map(|s| s.unwrap()).collect();
+    println!("Read input {}: {:?}", audio_in_path, spec);
+    let buffer: boucle::Buffer = match spec.sample_format {
+        hound::SampleFormat::Int => {
+            let samples = reader
+                .into_samples()
+                .filter_map(Result::ok);
+            samples.map(|s: i32| s.to_sample::<boucle::Sample>()).collect()
+        },
+        hound::SampleFormat::Float => {
+            let samples = reader
+                .into_samples()
+                .filter_map(Result::ok);
+            samples.map(|s: f32| s.to_sample::<boucle::Sample>()).collect()
+        },
+    };
+    return Ok(buffer);
+}
 
-    let mut writer = hound::WavWriter::create(audio_out, spec).unwrap();
+fn run_batch(audio_in_path: &str, audio_out: &str, operations_file: &str) {
+    let op_sequence = read_ops(&operations_file).expect("Failed to read ops");
+    for op in &op_sequence {
+        println!("{}", op);
+    }
+
+    let mut buffer = input_wav_to_buffer(audio_in_path).expect("Failed to read input");
+
+    let out_spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: 44100,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int
+    };
+    let mut writer = hound::WavWriter::create(audio_out, out_spec).unwrap();
 
     let boucle: boucle::Boucle = boucle::Boucle::new(boucle::Config::default());
     boucle.process_buffer(&buffer, &op_sequence, &mut |s| writer.write_sample(s).unwrap());
@@ -70,7 +94,7 @@ fn open_out_stream<T: cpal::Sample + 'static>(device: cpal::Device, config: cpal
     ).unwrap());
 }
 
-fn run_live(midi_in_port: i32) -> Result<(), portmidi::Error> {
+fn run_live(midi_in_port: i32, audio_in_path: &str) -> Result<(), portmidi::Error> {
     let midi_context = PortMidi::new()?;
     let midi_info = midi_context.device(midi_in_port)?;
     let midi_in_port = midi_context.input_port(midi_info, 1024)?;
@@ -87,6 +111,8 @@ fn run_live(midi_in_port: i32) -> Result<(), portmidi::Error> {
     };
 
     //audio_out_stream.play().unwrap();
+
+    let input_buffer = input_wav_to_buffer(audio_in_path).expect("Failed to read input");
 
     while let Ok(_) = midi_in_port.poll() {
         if let Ok(Some(event)) = midi_in_port.read_n(1024) {
@@ -144,7 +170,8 @@ fn main() {
         ("live", Some(sub_m)) => {
             let midi_port: i32 = sub_m.value_of("midi-port").unwrap_or("0").
                                     parse::<i32>().unwrap();
-            run_live(midi_port).unwrap();
+            let audio_in = sub_m.value_of("INPUT").unwrap();
+            run_live(midi_port, audio_in).unwrap();
         },
         ("list-ports", Some(_)) => {
             run_list_ports().unwrap();
