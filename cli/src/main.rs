@@ -1,3 +1,5 @@
+mod tests;
+
 use boucle;
 use boucle::op_sequence;
 use boucle::OpSequence;
