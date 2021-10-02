@@ -28,7 +28,7 @@ fn read_ops(file_name: &str) -> Result<OpSequence, io::Error> {
 }
 
 fn input_wav_to_buffer(audio_in_path: &str) -> Result<boucle::Buffer, hound::Error> {
-    let mut reader = hound::WavReader::open(audio_in_path)?;
+    let reader = hound::WavReader::open(audio_in_path)?;
     let spec = reader.spec();
 
     if spec.channels != 1 {
@@ -59,7 +59,7 @@ fn run_batch(audio_in_path: &str, audio_out: &str, operations_file: &str) {
         println!("{}", op);
     }
 
-    let mut buffer = input_wav_to_buffer(audio_in_path).expect("Failed to read input");
+    let buffer = input_wav_to_buffer(audio_in_path).expect("Failed to read input");
 
     let out_spec = hound::WavSpec {
         channels: 1,
@@ -109,7 +109,7 @@ fn run_live(midi_in_port: i32, audio_in_path: &str) -> Result<(), portmidi::Erro
         .expect("no output device available");
     let audio_config = get_audio_config(&audio_out_device);
 
-    let audio_out_stream = match audio_config.sample_format() {
+    let _audio_out_stream = match audio_config.sample_format() {
         cpal::SampleFormat::F32 => open_out_stream::<f32>(audio_out_device, audio_config.into()),
         cpal::SampleFormat::I16 => open_out_stream::<i16>(audio_out_device, audio_config.into()),
         cpal::SampleFormat::U16 => open_out_stream::<u16>(audio_out_device, audio_config.into()),
@@ -117,7 +117,7 @@ fn run_live(midi_in_port: i32, audio_in_path: &str) -> Result<(), portmidi::Erro
 
     //audio_out_stream.play().unwrap();
 
-    let input_buffer = input_wav_to_buffer(audio_in_path).expect("Failed to read input");
+    let _input_buffer = input_wav_to_buffer(audio_in_path).expect("Failed to read input");
 
     while let Ok(_) = midi_in_port.poll() {
         if let Ok(Some(event)) = midi_in_port.read_n(1024) {
