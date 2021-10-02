@@ -6,7 +6,7 @@ mod tests;
 pub use op_sequence::OpSequence;
 
 // This is the sample format used inside the audio engine.
-pub type Sample = i32;
+pub type Sample = f32;
 
 pub type Buffer = Vec<Sample>;
 
@@ -52,7 +52,7 @@ impl Boucle {
         }
 
         let block_length = block_end - block_start;
-        let mut block: Vec<Sample> = vec![0; block_length];
+        let mut block: Vec<Sample> = vec![0.0; block_length];
         println!("  copy {}..{}", block_start, block_end);
         block.copy_from_slice(&buffer[block_start..block_end]);
 
