@@ -70,7 +70,10 @@ fn run_batch(audio_in_path: &str, audio_out: &str, operations_file: &str) {
     let mut writer = hound::WavWriter::create(audio_out, out_spec).unwrap();
 
     let boucle: boucle::Boucle = boucle::Boucle::new(boucle::Config::default());
-    boucle.process_buffer(&buffer, &op_sequence, &mut |s| writer.write_sample(s).unwrap());
+    boucle.process_buffer(&buffer, &op_sequence, &mut |s| {
+        let s_i16 = s.to_sample::<i16>();
+        writer.write_sample(s_i16).unwrap();
+    });
     writer.finalize().unwrap();
 }
 
