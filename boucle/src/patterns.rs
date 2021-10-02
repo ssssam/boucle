@@ -20,7 +20,7 @@ pub struct CheckersReverse {
 }
 
 impl CheckersReverse {
-    fn new(bpm: Beats, block_size: i32) -> CheckersReverse {
+    fn new(_bpm: Beats, _block_size: i32) -> CheckersReverse {
         CheckersReverse {
             period: 2,   // Reverse every 2nd beat.
             duration: 1,
