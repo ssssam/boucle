@@ -13,27 +13,30 @@ use portmidi::{PortMidi};
 use std::fs::File;
 use std::io;
 use std::io::Read;use std::thread::sleep;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 enum InputBuffer { A, B }
 
 struct LoopBuffers {
+    loop_length: usize,
     input_a: boucle::Buffer,
     input_b: boucle::Buffer,
     current_input: InputBuffer,
-    input_pos: usize,
     output: boucle::Buffer,
-    output_pos: usize,
+    play_pos: usize,
+    record_pos: usize,
 }
 
-fn create_buffers(loop_length_seconds: usize) -> LoopBuffers {
+fn create_buffers(buffer_size_samples: usize) -> LoopBuffers {
     let this = LoopBuffers {
-        input_a: boucle::Buffer::new(),
-        input_b: boucle::Buffer::new(),
+        loop_length: buffer_size_samples,
+        input_a: vec!(0.0; buffer_size_samples),
+        input_b: vec!(0.0; buffer_size_samples),
         current_input: InputBuffer::A,
-        input_pos: 0,
-        output: boucle::Buffer::new(),
-        output_pos: 0,
+        record_pos: 0,
+        output: vec!(0.0; buffer_size_samples),
+        play_pos: 0,
     };
     return this;
 }
@@ -101,7 +104,6 @@ fn run_batch(audio_in_path: &str, audio_out: &str, operations_file: &str) {
 }
 
 const SAMPLE_RATE: u32 = 44100;
-const BUFFER_SIZE: usize = 102400;
 
 fn get_audio_config(device: &cpal::Device) -> cpal::SupportedStreamConfig {
     let mut supported_configs_range = device.supported_output_configs()
@@ -115,21 +117,35 @@ fn get_audio_config(device: &cpal::Device) -> cpal::SupportedStreamConfig {
 
 fn open_out_stream<T: cpal::Sample>(device: cpal::Device,
                                     config: cpal::StreamConfig,
-                                    buffer: std::sync::Arc<boucle::Buffer>) -> Box<cpal::Stream> {
-
-    let mut count = 0;
+                                    mut buffers_rc: Arc<Mutex<LoopBuffers>>) -> Box<cpal::Stream> {
     return Box::new(device.build_output_stream(
         &config,
         move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
-            println!("Callback: data length {}", data.len());
-            for sample in data.iter_mut() {
-                if count >= BUFFER_SIZE {
-                    println!("Warning! Buffer wrapped");
-                    count = 0;
-                }
-                *sample = cpal::Sample::from(&buffer[count]);
-                count+=1;
+            let mut buffers = buffers_rc.lock().unwrap();
+            let block_size = data.len();
+            println!("Block size: {}, play position: {}", block_size, buffers.play_pos);
+
+            // Simulate boucle processing loop.
+            // Since we have 2x input buffers, could we process them in-place instead
+            // of copying?
+            let mut pos = buffers.play_pos;
+            for i in 0..block_size {
+                let sample = match buffers.current_input {
+                    InputBuffer::A => buffers.input_a[pos],
+                    InputBuffer::B => buffers.input_b[pos],
+                };
+                buffers.output[pos] = sample;
+                pos = (pos + 1) % buffers.loop_length;
             }
+
+            // Copy from output buffer to audio driver.
+            let mut pos = buffers.play_pos;
+            for sample in data.iter_mut() {
+                *sample = cpal::Sample::from(&buffers.output[pos]);
+                pos = (pos + 1) % buffers.loop_length;
+            }
+
+            buffers.play_pos = (buffers.play_pos + block_size) % buffers.loop_length;
         },
         move |err| { println!("{}", err) }
     ).unwrap());
@@ -158,21 +174,22 @@ fn run_live(midi_in_port: i32, audio_in_path: &str, loop_time_seconds: f32) -> R
         .expect("no output device available");
     let audio_config = get_audio_config(&audio_out_device);
 
-    let input_buffer = input_wav_to_buffer(audio_in_path).expect("Failed to read input");
+    let input_wav_buffer = input_wav_to_buffer(audio_in_path).expect("Failed to read input");
 
     let buffer_size_samples: usize = (loop_time_seconds.ceil() as usize) * (SAMPLE_RATE as usize);
+    let mut buffers = create_buffers(buffer_size_samples);
 
-    let mut buffer: boucle::Buffer = vec!(0.0; BUFFER_SIZE);
-    for i in 0..BUFFER_SIZE {
+    for i in 0..buffer_size_samples {
         // Sin wave
         //buffer[i] = f32::sin((i as f32) / 10.0) * 0.2;
-        buffer[i] = input_buffer[i];
+        buffers.input_a[i] = input_wav_buffer[i];
+        buffers.input_b[i] = input_wav_buffer[i];
     }
-    let buf_rc: std::sync::Arc<boucle::Buffer> = std::sync::Arc::new(buffer);
+    let mut buf_rc: Arc<Mutex<LoopBuffers>> = Arc::new(Mutex::new(buffers));
     let _audio_out_stream = match audio_config.sample_format() {
-        cpal::SampleFormat::F32 => open_out_stream::<f32>(audio_out_device, audio_config.into(), buf_rc),
-        cpal::SampleFormat::I16 => open_out_stream::<i16>(audio_out_device, audio_config.into(), buf_rc),
-        cpal::SampleFormat::U16 => open_out_stream::<u16>(audio_out_device, audio_config.into(), buf_rc),
+        cpal::SampleFormat::F32 => open_out_stream::<f32>(audio_out_device, audio_config.into(), buf_rc.clone()),
+        cpal::SampleFormat::I16 => open_out_stream::<i16>(audio_out_device, audio_config.into(), buf_rc.clone()),
+        cpal::SampleFormat::U16 => open_out_stream::<u16>(audio_out_device, audio_config.into(), buf_rc.clone()),
     };
 
     //audio_out_stream.play().unwrap();
