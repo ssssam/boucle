@@ -100,17 +100,18 @@ fn run_batch(audio_in_path: &str, audio_out: &str, operations_file: &str) {
     writer.finalize().unwrap();
 }
 
+const SAMPLE_RATE: u32 = 44100;
+const BUFFER_SIZE: usize = 102400;
+
 fn get_audio_config(device: &cpal::Device) -> cpal::SupportedStreamConfig {
     let mut supported_configs_range = device.supported_output_configs()
         .expect("error while querying configs");
     let supported_config = supported_configs_range.next()
         .expect("no supported config")
-        .with_sample_rate(cpal::SampleRate(44100));
+        .with_sample_rate(cpal::SampleRate(SAMPLE_RATE));
     println!("audio config: {:?}", supported_config);
     return supported_config;
 }
-
-const BUFFER_SIZE: usize = 102400;
 
 fn open_out_stream<T: cpal::Sample>(device: cpal::Device,
                                     config: cpal::StreamConfig,
@@ -142,7 +143,7 @@ fn open_midi_in<'a>(midi_context: &'a portmidi::PortMidi, midi_in_port: i32) -> 
     };
 }
 
-fn run_live(midi_in_port: i32, audio_in_path: &str) -> Result<(), String> {
+fn run_live(midi_in_port: i32, audio_in_path: &str, loop_time_seconds: f32) -> Result<(), String> {
     let midi_context = match PortMidi::new() {
         Ok(value) => value,
         Err(error) => return Err(format!("Cannot open PortMIDI: {}", error)),
@@ -158,6 +159,8 @@ fn run_live(midi_in_port: i32, audio_in_path: &str) -> Result<(), String> {
     let audio_config = get_audio_config(&audio_out_device);
 
     let input_buffer = input_wav_to_buffer(audio_in_path).expect("Failed to read input");
+
+    let buffer_size_samples: usize = (loop_time_seconds.ceil() as usize) * (SAMPLE_RATE as usize);
 
     let mut buffer: boucle::Buffer = vec!(0.0; BUFFER_SIZE);
     for i in 0..BUFFER_SIZE {
@@ -197,6 +200,27 @@ fn run_list_ports() -> Result<(), portmidi::Error> {
     return Ok(())
 }
 
+fn parse_f32_option(string: Option<&str>) -> Option<f32> {
+    return match string {
+        Some(text) => Some(text.parse::<f32>().unwrap()),
+        None => None
+    };
+}
+
+fn calculate_loop_time(seconds: Option<f32>, beats: Option<f32>, bpm: Option<f32>) -> Result<f32, String> {
+    if let Some(value) = seconds {
+        return Ok(value);
+    } else if let Some(value) = beats {
+        if let Some(multiplier) = bpm {
+            return Ok(value * multiplier);
+        } else {
+            return Err("Loop size in beats requires a BPM".to_string());
+        }
+    } else {
+        return Err("Must specify loop size in either seconds or beats".to_string());
+    };
+}
+
 fn main() {
     let app_m = App::new("Boucle looper")
         .version("1.0")
@@ -209,7 +233,24 @@ fn main() {
                  .short("p")
                  .help("MIDI port to read from")
                  .takes_value(true)
-                 .value_name("PORT")))
+                 .value_name("PORT"))
+            .arg(Arg::with_name("bpm")
+                 .long("bpm")
+                 .help("Beats per minute")
+                 .takes_value(true)
+                 .value_name("BPM"))
+            .arg(Arg::with_name("loop-time-seconds")
+                 .long("loop-time-seconds")
+                 .short("s")
+                 .help("Loop length, in seconds")
+                 .takes_value(true)
+                 .value_name("SECONDS"))
+            .arg(Arg::with_name("loop-time-beats")
+                 .long("loop-time-beats")
+                 .short("b")
+                 .help("Loop length, in beats (requires `--bpm`)")
+                 .takes_value(true)
+                 .value_name("BEATS")))
         .subcommand(App::new("batch")
             .arg(Arg::with_name("INPUT")
                  .required(true)
@@ -231,7 +272,14 @@ fn main() {
             let midi_port: i32 = sub_m.value_of("midi-port").unwrap_or("0").
                                     parse::<i32>().unwrap();
             let audio_in = sub_m.value_of("INPUT").unwrap();
-            run_live(midi_port, audio_in).unwrap();
+            let loop_time_seconds: Option<f32> = parse_f32_option(sub_m.value_of("loop-time-seconds"));
+            let loop_time_beats: Option<f32> = parse_f32_option(sub_m.value_of("loop-time-beats"));
+            let bpm: Option<f32> = parse_f32_option(sub_m.value_of("bpm"));
+            let loop_time = match calculate_loop_time(loop_time_seconds, loop_time_beats, bpm) {
+                Ok(value) => value,
+                Err(string) => panic!("{}", string),
+            };
+            run_live(midi_port, audio_in, loop_time).unwrap();
         },
         ("list-ports", Some(_)) => {
             run_list_ports().unwrap();
