@@ -99,10 +99,23 @@ fn open_out_stream<T: cpal::Sample + 'static>(device: cpal::Device, config: cpal
     ).unwrap());
 }
 
-fn run_live(midi_in_port: i32, audio_in_path: &str) -> Result<(), portmidi::Error> {
-    let midi_context = PortMidi::new()?;
+fn open_midi_in<'a>(midi_context: &'a portmidi::PortMidi, midi_in_port: i32) -> Result<Box<portmidi::InputPort<'a>>, portmidi::Error> {
     let midi_info = midi_context.device(midi_in_port)?;
-    let midi_in_port = midi_context.input_port(midi_info, 1024)?;
+    match midi_context.input_port(midi_info, 1024) {
+        Ok(port) => return Ok(Box::new(port)),
+        Err(error) => return Err(error),
+    };
+}
+
+fn run_live(midi_in_port: i32, audio_in_path: &str) -> Result<(), String> {
+    let midi_context = match PortMidi::new() {
+        Ok(value) => value,
+        Err(error) => return Err(format!("Cannot open PortMIDI: {}", error)),
+    };
+    let midi_in = match open_midi_in(&midi_context, midi_in_port) {
+        Ok(value) => value,
+        Err(error) => return Err(format!("Cannot open MIDI input: {}", error)),
+    };
 
     let audio_host = cpal::default_host();
     let audio_out_device = audio_host.default_output_device()
@@ -119,8 +132,8 @@ fn run_live(midi_in_port: i32, audio_in_path: &str) -> Result<(), portmidi::Erro
 
     let _input_buffer = input_wav_to_buffer(audio_in_path).expect("Failed to read input");
 
-    while let Ok(_) = midi_in_port.poll() {
-        if let Ok(Some(event)) = midi_in_port.read_n(1024) {
+    while let Ok(_) = midi_in.poll() {
+        if let Ok(Some(event)) = midi_in.read_n(1024) {
             println!("{:?}", event);
         }
         // there is no blocking receive method in PortMidi, therefore
