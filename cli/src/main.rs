@@ -87,15 +87,27 @@ fn get_audio_config(device: &cpal::Device) -> cpal::SupportedStreamConfig {
     return supported_config;
 }
 
-fn write_silence<T: cpal::Sample>(data: &mut [T], _: &cpal::OutputCallbackInfo) {
-    for sample in data.iter_mut() {
-        *sample = cpal::Sample::from(&0.0);
-    }
-}
+const BUFFER_SIZE: usize = 102400;
 
-fn open_out_stream<T: cpal::Sample + 'static>(device: cpal::Device, config: cpal::StreamConfig) -> Box<cpal::Stream> {
+fn open_out_stream<T: cpal::Sample>(device: cpal::Device,
+                                    config: cpal::StreamConfig,
+                                    buffer: std::sync::Arc<boucle::Buffer>) -> Box<cpal::Stream> {
+
+    let mut count = 0;
     return Box::new(device.build_output_stream(
-        &config, write_silence::<T>, move |err| { println!("{}", err) }
+        &config,
+        move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
+            println!("Callback: data length {}", data.len());
+            for sample in data.iter_mut() {
+                if count >= BUFFER_SIZE {
+                    println!("Warning! Buffer wrapped");
+                    count = 0;
+                }
+                *sample = cpal::Sample::from(&buffer[count]);
+                count+=1;
+            }
+        },
+        move |err| { println!("{}", err) }
     ).unwrap());
 }
 
@@ -122,15 +134,22 @@ fn run_live(midi_in_port: i32, audio_in_path: &str) -> Result<(), String> {
         .expect("no output device available");
     let audio_config = get_audio_config(&audio_out_device);
 
+    let input_buffer = input_wav_to_buffer(audio_in_path).expect("Failed to read input");
+
+    let mut buffer: boucle::Buffer = vec!(0.0; BUFFER_SIZE);
+    for i in 0..BUFFER_SIZE {
+        // Sin wave
+        //buffer[i] = f32::sin((i as f32) / 10.0) * 0.2;
+        buffer[i] = input_buffer[i];
+    }
+    let buf_rc: std::sync::Arc<boucle::Buffer> = std::sync::Arc::new(buffer);
     let _audio_out_stream = match audio_config.sample_format() {
-        cpal::SampleFormat::F32 => open_out_stream::<f32>(audio_out_device, audio_config.into()),
-        cpal::SampleFormat::I16 => open_out_stream::<i16>(audio_out_device, audio_config.into()),
-        cpal::SampleFormat::U16 => open_out_stream::<u16>(audio_out_device, audio_config.into()),
+        cpal::SampleFormat::F32 => open_out_stream::<f32>(audio_out_device, audio_config.into(), buf_rc),
+        cpal::SampleFormat::I16 => open_out_stream::<i16>(audio_out_device, audio_config.into(), buf_rc),
+        cpal::SampleFormat::U16 => open_out_stream::<u16>(audio_out_device, audio_config.into(), buf_rc),
     };
 
     //audio_out_stream.play().unwrap();
-
-    let _input_buffer = input_wav_to_buffer(audio_in_path).expect("Failed to read input");
 
     while let Ok(_) = midi_in.poll() {
         if let Ok(Some(event)) = midi_in.read_n(1024) {
