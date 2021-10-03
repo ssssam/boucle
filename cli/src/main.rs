@@ -15,6 +15,29 @@ use std::io;
 use std::io::Read;use std::thread::sleep;
 use std::time::Duration;
 
+enum InputBuffer { A, B }
+
+struct LoopBuffers {
+    input_a: boucle::Buffer,
+    input_b: boucle::Buffer,
+    current_input: InputBuffer,
+    input_pos: usize,
+    output: boucle::Buffer,
+    output_pos: usize,
+}
+
+fn create_buffers(loop_length_seconds: usize) -> LoopBuffers {
+    let this = LoopBuffers {
+        input_a: boucle::Buffer::new(),
+        input_b: boucle::Buffer::new(),
+        current_input: InputBuffer::A,
+        input_pos: 0,
+        output: boucle::Buffer::new(),
+        output_pos: 0,
+    };
+    return this;
+}
+
 fn read_ops(file_name: &str) -> Result<OpSequence, io::Error> {
     let mut text = String::new();
     let mut op_sequence = OpSequence::new();
