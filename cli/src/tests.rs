@@ -19,7 +19,7 @@ mod tests {
     fn get_test_output_path(filename: &str) -> String {
         let mut path = std::env::temp_dir();
         path.push("boucle-tests");
-        std::fs::create_dir_all(path.to_str().unwrap());
+        std::fs::create_dir_all(path.to_str().unwrap()).unwrap();
         path.push(filename);
         return path
             .to_str().unwrap()
