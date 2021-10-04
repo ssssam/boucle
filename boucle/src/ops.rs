@@ -7,12 +7,14 @@ use std::fmt;
 use std::num;
 
 pub trait Op: fmt::Debug {
-    // Identity transforms.
-    fn transform_position(self: &Self,
-                          _position: &mut SamplePosition,
-                          _op_start: SamplePosition,
-                          _op_end: SamplePosition,
-                          _buffer_end: SamplePosition) {}
+    // Return a +/- delta that will be applied to `play_clock` to represent this operation.
+    fn get_transform(self: &Self,
+                     _play_clock: SamplePosition,
+                     _op_start: SamplePosition,
+                     _loop_length: SamplePosition) -> isize {
+        // Identity transform
+        return 0;
+    }
 }
 
 #[derive(Debug)]
@@ -34,57 +36,46 @@ pub struct SpeedRampOp {
     end_speed: f32,
 }
 
-impl Op for ReverseOp {
-    fn transform_position(self: &Self,
-                          position: &mut SamplePosition,
-                          op_start: SamplePosition,
-                          op_end: SamplePosition,
-                          _buffer_end: SamplePosition) {
-        // Mirror position within operation boundary.
-        assert!(op_start <= *position);
-        assert!(op_end >= *position);
-        *position = op_end - (*position - op_start);
-        println!("reverse-op({}-{}): Position now {} )", op_start, op_end, *position);
-    }
-}
-
-// From https://stackoverflow.com/questions/54035728/how-to-add-a-negative-i32-number-to-an-usize-variable/54035801
-fn add(u: usize, i: i32) -> usize {
-    if i.is_negative() {
-        u - i.wrapping_abs() as u32 as usize
-    } else {
-        u + i as usize
-    }
-}
-
 impl Op for JumpOp {
-    fn transform_position(self: &Self,
-                          position: &mut SamplePosition,
+    fn get_transform(self: &Self,
+                          play_clock: SamplePosition,
                           op_start: SamplePosition,
-                          op_end: SamplePosition,
-                          buffer_end: SamplePosition) {
-        *position = add(*position, self.offset) % buffer_end;
-        println!("jump-op({},{}): Position now {}", op_start, op_end, *position);
+                          loop_length: SamplePosition) -> SampleOffset {
+        return self.offset;
+    }
+}
+
+impl Op for ReverseOp {
+    fn get_transform(self: &Self,
+                     play_clock: SamplePosition,
+                     op_start: SamplePosition,
+                     loop_length: SamplePosition) -> SampleOffset {
+        let op_active_time = play_clock - op_start;
+        let transform = -(op_active_time as SampleOffset) * 2;
+        println!("reverse-op({}): clock {}, active time = {}, transform {}", op_start, play_clock, op_active_time, transform);
+        return transform;
     }
 }
 
 impl Op for RepeatOp {
-    fn transform_position(self: &Self,
-                          position: &mut SamplePosition,
-                          op_start: SamplePosition,
-                          op_end: SamplePosition,
-                          _buffer_end: SamplePosition) {
-        let samples_since_loop_started = *position - op_start;
-        let offset = if samples_since_loop_started >= self.loop_size {
-            samples_since_loop_started - (samples_since_loop_started % self.loop_size)
-        } else {
-            0
-        };
-        println!("repeat-op: {} samples since loop started, loop size {}: go back {}",
-                 samples_since_loop_started, self.loop_size, offset);
-
-        *position = *position - offset;
-        println!("repeat-op({},{}): Position now {}", op_start, op_end, *position);
+    fn get_transform(self: &Self,
+                     play_clock: SamplePosition,
+                     op_start: SamplePosition,
+                     loop_length: SamplePosition) -> SampleOffset {
+        // Samples since operation started
+        let delta = play_clock - op_start;
+        // Times the inner loop has repeated
+        let cycle_count = ((delta as f64) / (self.loop_size as f64)).floor() as SampleOffset;
+        // Offset within current inner loop
+        let inner_loop_size = self.loop_size as SampleOffset;
+        let mut offset = 0;
+        if cycle_count > 0 {
+            offset = (cycle_count) * inner_loop_size;
+        }
+        let transform: SampleOffset = -offset as SampleOffset;
+        println!("repeat-op: delta {}, inner loop size {}: cycle count {}, offset {}, tf {}",
+                 delta, self.loop_size, cycle_count, offset, transform);
+        return transform;
     }
 }
 

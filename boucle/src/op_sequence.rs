@@ -6,20 +6,27 @@ use std::fmt;
 #[derive(Debug)]
 pub struct Entry {
     pub start: SamplePosition,
-    pub duration: SamplePosition,
+    pub duration: Option<SamplePosition>,
     pub op: Box<dyn Op>,
 }
 
 impl fmt::Display for Entry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "({}->{}): {:?}", self.start, self.start + self.duration, self.op)
+        let end = match self.duration {
+            Some(duration) => format!("{}", duration),
+            None => format!("∞"),
+        };
+        return write!(f, "({}->{}): {:?}", self.start, end, self.op);
     }
 }
 
 pub type OpSequence = Vec<Entry>;
 
 pub fn op_active(entry: &Entry, position: SamplePosition) -> bool {
-    let result = position >= entry.start && position < (entry.start + entry.duration);
-    println!("op_active: entry ({},{}) position {}: {}", entry.start, entry.duration, position, result);
-    return result;
+    let started = position >= entry.start;
+    let finished = match entry.duration {
+        Some(duration) => position >= (entry.start + duration),
+        None => false,
+    };
+    return started && !finished;
 }

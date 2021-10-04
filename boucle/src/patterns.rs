@@ -33,7 +33,7 @@ impl Pattern for CheckersReverse {
         if (beat % self.period) == 0 {
             Some(op_sequence::Entry {
                 start: (beat * beats_to_samples) as SamplePosition,
-                duration: (self.duration * beats_to_samples) as SamplePosition,
+                duration: Some((self.duration * beats_to_samples) as SamplePosition),
                 op: Box::new(ops::ReverseOp {}),
             })
         } else {
