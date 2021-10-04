@@ -1,6 +1,7 @@
 mod tests;
 
 use boucle;
+use boucle::Boucle;
 use boucle::op_sequence;
 use boucle::OpSequence;
 
@@ -96,7 +97,7 @@ fn run_batch(audio_in_path: &str, audio_out: &str, operations_file: &str) {
     let mut writer = hound::WavWriter::create(audio_out, out_spec).unwrap();
 
     let boucle: boucle::Boucle = boucle::Boucle::new(boucle::Config::default());
-    boucle.process_buffer(&buffer, &op_sequence, &mut |s| {
+    boucle.process_buffer(&buffer, 0, buffer.len(), &op_sequence, &mut |s| {
         let s_i16 = s.to_sample::<i16>();
         writer.write_sample(s_i16).unwrap();
     });
@@ -117,6 +118,7 @@ fn get_audio_config(device: &cpal::Device) -> cpal::SupportedStreamConfig {
 
 fn open_out_stream<T: cpal::Sample>(device: cpal::Device,
                                     config: cpal::StreamConfig,
+                                    mut boucle_rc: Arc<Mutex<Boucle>>,
                                     mut buffers_rc: Arc<Mutex<LoopBuffers>>) -> Box<cpal::Stream> {
     return Box::new(device.build_output_stream(
         &config,
@@ -125,25 +127,23 @@ fn open_out_stream<T: cpal::Sample>(device: cpal::Device,
             let block_size = data.len();
             println!("Block size: {}, play position: {}", block_size, buffers.play_pos);
 
-            // Simulate boucle processing loop.
-            // Since we have 2x input buffers, could we process them in-place instead
-            // of copying?
-            let mut pos = buffers.play_pos;
-            for i in 0..block_size {
-                let sample = match buffers.current_input {
-                    InputBuffer::A => buffers.input_a[pos],
-                    InputBuffer::B => buffers.input_b[pos],
-                };
-                buffers.output[pos] = sample;
-                pos = (pos + 1) % buffers.loop_length;
-            }
+            // Actual boucle!
+            let boucle = boucle_rc.lock().unwrap();
+            let in_buffer = match buffers.current_input {
+                InputBuffer::A => &buffers.input_a,
+                InputBuffer::B => &buffers.input_b,
+            };
 
-            // Copy from output buffer to audio driver.
-            let mut pos = buffers.play_pos;
-            for sample in data.iter_mut() {
-                *sample = cpal::Sample::from(&buffers.output[pos]);
-                pos = (pos + 1) % buffers.loop_length;
-            }
+            let mut out_pos = 0;
+            let ops = Vec::new();
+            let mut data_iter = data.iter_mut();
+            boucle.process_buffer(&in_buffer, buffers.play_pos, buffers.play_pos + data.len(),
+                                  &ops, &mut |s| {
+                //data_iter.next();
+                //*data_iter = cpal::Sample::from(&s);
+                data[out_pos] = cpal::Sample::from(&s);
+                out_pos += 1;
+            });
 
             buffers.play_pos = (buffers.play_pos + block_size) % buffers.loop_length;
         },
@@ -176,6 +176,9 @@ fn run_live(midi_in_port: i32, audio_in_path: &str, loop_time_seconds: f32) -> R
 
     let input_wav_buffer = input_wav_to_buffer(audio_in_path).expect("Failed to read input");
 
+    let boucle: boucle::Boucle = boucle::Boucle::new(boucle::Config::default());
+    let mut boucle_rc: Arc<Mutex<Boucle>> = Arc::new(Mutex::new(boucle));
+
     let buffer_size_samples: usize = (loop_time_seconds.ceil() as usize) * (SAMPLE_RATE as usize);
     let mut buffers = create_buffers(buffer_size_samples);
 
@@ -185,11 +188,13 @@ fn run_live(midi_in_port: i32, audio_in_path: &str, loop_time_seconds: f32) -> R
         buffers.input_a[i] = input_wav_buffer[i];
         buffers.input_b[i] = input_wav_buffer[i];
     }
+
+
     let mut buf_rc: Arc<Mutex<LoopBuffers>> = Arc::new(Mutex::new(buffers));
     let _audio_out_stream = match audio_config.sample_format() {
-        cpal::SampleFormat::F32 => open_out_stream::<f32>(audio_out_device, audio_config.into(), buf_rc.clone()),
-        cpal::SampleFormat::I16 => open_out_stream::<i16>(audio_out_device, audio_config.into(), buf_rc.clone()),
-        cpal::SampleFormat::U16 => open_out_stream::<u16>(audio_out_device, audio_config.into(), buf_rc.clone()),
+        cpal::SampleFormat::F32 => open_out_stream::<f32>(audio_out_device, audio_config.into(), boucle_rc.clone(), buf_rc.clone()),
+        cpal::SampleFormat::I16 => open_out_stream::<i16>(audio_out_device, audio_config.into(), boucle_rc.clone(), buf_rc.clone()),
+        cpal::SampleFormat::U16 => open_out_stream::<u16>(audio_out_device, audio_config.into(), boucle_rc.clone(), buf_rc.clone()),
     };
 
     //audio_out_stream.play().unwrap();
