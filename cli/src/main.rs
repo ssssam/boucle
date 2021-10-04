@@ -25,7 +25,7 @@ struct LoopBuffers {
     input_b: boucle::Buffer,
     current_input: InputBuffer,
     output: boucle::Buffer,
-    play_pos: usize,
+    play_clock: usize,
     record_pos: usize,
 }
 
@@ -37,7 +37,7 @@ fn create_buffers(buffer_size_samples: usize) -> LoopBuffers {
         current_input: InputBuffer::A,
         record_pos: 0,
         output: vec!(0.0; buffer_size_samples),
-        play_pos: 0,
+        play_clock: 0,
     };
     return this;
 }
@@ -49,7 +49,7 @@ fn read_ops(file_name: &str) -> Result<OpSequence, io::Error> {
     file.read_to_string(&mut text)?;
     for line in text.lines() {
         let (start, duration, op) = boucle::ops::new_from_string(line).expect("Failed to parse line");
-        op_sequence.push(op_sequence::Entry { start, duration, op });
+        op_sequence.push(op_sequence::Entry { start, duration: Some(duration), op });
     }
     return Ok(op_sequence);
 }
@@ -119,13 +119,14 @@ fn get_audio_config(device: &cpal::Device) -> cpal::SupportedStreamConfig {
 fn open_out_stream<T: cpal::Sample>(device: cpal::Device,
                                     config: cpal::StreamConfig,
                                     mut boucle_rc: Arc<Mutex<Boucle>>,
+                                    ops_rc: Arc<Mutex<boucle::OpSequence>>,
                                     mut buffers_rc: Arc<Mutex<LoopBuffers>>) -> Box<cpal::Stream> {
     return Box::new(device.build_output_stream(
         &config,
         move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
             let mut buffers = buffers_rc.lock().unwrap();
             let block_size = data.len();
-            println!("Block size: {}, play position: {}", block_size, buffers.play_pos);
+            println!("Block size: {}, play time: {}", block_size, buffers.play_clock);
 
             // Actual boucle!
             let boucle = boucle_rc.lock().unwrap();
@@ -135,17 +136,14 @@ fn open_out_stream<T: cpal::Sample>(device: cpal::Device,
             };
 
             let mut out_pos = 0;
-            let ops = Vec::new();
-            let mut data_iter = data.iter_mut();
-            boucle.process_buffer(&in_buffer, buffers.play_pos, buffers.play_pos + data.len(),
+            let ops = ops_rc.lock().unwrap();
+            boucle.process_buffer(&in_buffer, buffers.play_clock, data.len(),
                                   &ops, &mut |s| {
-                //data_iter.next();
-                //*data_iter = cpal::Sample::from(&s);
                 data[out_pos] = cpal::Sample::from(&s);
                 out_pos += 1;
             });
 
-            buffers.play_pos = (buffers.play_pos + block_size) % buffers.loop_length;
+            buffers.play_clock = buffers.play_clock + block_size;
         },
         move |err| { println!("{}", err) }
     ).unwrap());
@@ -189,19 +187,40 @@ fn run_live(midi_in_port: i32, audio_in_path: &str, loop_time_seconds: f32) -> R
         buffers.input_b[i] = input_wav_buffer[i];
     }
 
+    let op_sequence = OpSequence::new();
+    let ops_rc: Arc<Mutex<OpSequence>> = Arc::new(Mutex::new(op_sequence));
 
     let mut buf_rc: Arc<Mutex<LoopBuffers>> = Arc::new(Mutex::new(buffers));
     let _audio_out_stream = match audio_config.sample_format() {
-        cpal::SampleFormat::F32 => open_out_stream::<f32>(audio_out_device, audio_config.into(), boucle_rc.clone(), buf_rc.clone()),
-        cpal::SampleFormat::I16 => open_out_stream::<i16>(audio_out_device, audio_config.into(), boucle_rc.clone(), buf_rc.clone()),
-        cpal::SampleFormat::U16 => open_out_stream::<u16>(audio_out_device, audio_config.into(), boucle_rc.clone(), buf_rc.clone()),
+        cpal::SampleFormat::F32 => open_out_stream::<f32>(audio_out_device, audio_config.into(), boucle_rc.clone(), ops_rc.clone(), buf_rc.clone()),
+        cpal::SampleFormat::I16 => open_out_stream::<i16>(audio_out_device, audio_config.into(), boucle_rc.clone(), ops_rc.clone(), buf_rc.clone()),
+        cpal::SampleFormat::U16 => open_out_stream::<u16>(audio_out_device, audio_config.into(), boucle_rc.clone(), ops_rc.clone(), buf_rc.clone()),
     };
 
     //audio_out_stream.play().unwrap();
 
+    let mut pushed_reverse: bool = false; // for testing
+
     while let Ok(_) = midi_in.poll() {
         if let Ok(Some(event)) = midi_in.read_n(1024) {
-            println!("{:?}", event);
+            let event2: &portmidi::MidiEvent = event.get(0).unwrap();
+            println!("MIDI event: status {}", event2.message.status);
+            if (event2.message.status & 0xF0) == 0x80 {
+                println!("MIDI Note off: {:?}", event);
+                if pushed_reverse {
+                    let mut op_sequence = ops_rc.lock().unwrap();
+                    op_sequence.truncate(0);
+                    pushed_reverse = false;
+                }
+            } else if (event2.message.status & 0xF0) == 0x90 {
+                println!("MIDI Note on: {:?}", event);
+                if !pushed_reverse {
+                    let op = Box::new(boucle::ops::ReverseOp { }) as Box<dyn boucle::ops::Op + Send>;
+                    let mut op_sequence = ops_rc.lock().unwrap();
+                    op_sequence.push(op_sequence::Entry { start: 0, duration: None, op });
+                    pushed_reverse = true;
+                }
+            }
         }
         // there is no blocking receive method in PortMidi, therefore
         // we have to sleep some time to prevent a busy-wait loop

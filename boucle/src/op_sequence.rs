@@ -7,7 +7,7 @@ use std::fmt;
 pub struct Entry {
     pub start: SamplePosition,
     pub duration: Option<SamplePosition>,
-    pub op: Box<dyn Op>,
+    pub op: Box<Op + Send>,
 }
 
 impl fmt::Display for Entry {

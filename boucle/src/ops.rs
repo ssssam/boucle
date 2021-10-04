@@ -104,7 +104,7 @@ impl From<num::ParseIntError> for ParseError {
   }
 }
 
-pub fn new_from_string(line: &str) -> Result<(SamplePosition, SamplePosition, Box<dyn Op>), ParseError> {
+pub fn new_from_string(line: &str) -> Result<(SamplePosition, SamplePosition, Box<dyn Op + Send>), ParseError> {
     let parts: Vec<&str> = line.split_ascii_whitespace().collect();
 
     let start = parts[1].parse::<SamplePosition>()?;
