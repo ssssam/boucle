@@ -10,18 +10,18 @@ pub type Sample = f32;
 
 pub type Buffer = Vec<Sample>;
 
-pub type PositionInSamples = usize;
-pub type PositionInBlocks = usize;
-pub type OffsetInBlocks = i32;
+pub type SamplePosition = usize;
+pub type SampleOffset = i32;
 
 pub struct Config {
-    pub frames_per_block: usize,
+    // FIXME: this is a placeholder right now, it has no effect.
+    pub sample_rate: usize,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Config {
-            frames_per_block: 16
+            sample_rate: 44100
         }
     }
 }
@@ -35,52 +35,30 @@ impl Boucle {
         return Boucle { config: config }
     }
 
-    pub fn process_block(self: &Boucle, buffer: &[Sample], op_sequence: &OpSequence, position: PositionInSamples) -> Vec<Sample> {
-        println!("Processing block at position {}", position);
-
-        let mut block_start = position;
-        let mut block_end = position + self.config.frames_per_block;
-
-        let block_position: PositionInBlocks = position / self.config.frames_per_block;
+    pub fn next_sample(self: &Boucle, loop_buffer: &[Sample], op_sequence: &OpSequence, play_position: SamplePosition) -> Sample {
+        let mut position = play_position;
 
         for entry in op_sequence {
-            if op_sequence::op_in_block(entry, block_position) {
-                entry.op.transform_position(&mut block_start, &mut block_end,
-                                            entry.start * self.config.frames_per_block,
-                                            buffer.len())
+            if op_sequence::op_active(entry, position) {
+                entry.op.transform_position(&mut position, entry.start, entry.start + entry.duration, loop_buffer.len())
             }
         }
 
-        let block_length = block_end - block_start;
-        let mut block: Vec<Sample> = vec![0.0; block_length];
-        println!("  copy {}..{}", block_start, block_end);
-        block.copy_from_slice(&buffer[block_start..block_end]);
-
-        for entry in op_sequence {
-            if op_sequence::op_in_block(entry, block_position) {
-                entry.op.transform_block(&mut block)
-            }
-        }
-
-        return block;
+        return loop_buffer[position];
     }
 
-    pub fn process_buffer(self: &Boucle, buffer: &[Sample], ops: &OpSequence, write_sample: &mut dyn FnMut(Sample)) {
-        let buffer_size = buffer.len();
-        println!("Buffer is {} samples long, {} frames per block", buffer_size, self.config.frames_per_block);
+    pub fn process_buffer(self: &Boucle,
+                          loop_buffer: &[Sample],
+                          play_start: SamplePosition,
+                          play_end: SamplePosition,
+                          ops: &OpSequence,
+                          write_sample: &mut dyn FnMut(Sample)) {
+        let buffer_size = loop_buffer.len();
+        println!("Buffer is {} samples long, playing {} to {}", buffer_size, play_start, play_end);
 
-        if buffer_size % self.config.frames_per_block != 0 {
-            panic!("Buffer size must be a multiple of block size")
-        }
-
-        let mut position = 0;
-        while position < buffer_size {
-            let block = self.process_block(&buffer, ops, position);
-            position += self.config.frames_per_block;
-
-            for s in block {
-                write_sample(s);
-            }
+        for position in play_start..play_end {
+            let s = self.next_sample(&loop_buffer, ops, position % buffer_size);
+            write_sample(s);
         }
     }
 }

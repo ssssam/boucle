@@ -1,7 +1,6 @@
 use crate::Sample;
-use crate::PositionInSamples;
-use crate::PositionInBlocks;
-use crate::OffsetInBlocks;
+use crate::SamplePosition;
+use crate::SampleOffset;
 
 use std::convert::TryFrom;
 use std::fmt;
@@ -10,11 +9,10 @@ use std::num;
 pub trait Op: fmt::Debug {
     // Identity transforms.
     fn transform_position(self: &Self,
-                          _block_start: &mut PositionInSamples,
-                          _block_end: &mut PositionInSamples,
-                          _op_start: PositionInSamples,
-                          _buffer_end: PositionInSamples) {}
-    fn transform_block(self: &Self, _block: &mut[Sample]) {}
+                          _position: &mut SamplePosition,
+                          _op_start: SamplePosition,
+                          _op_end: SamplePosition,
+                          _buffer_end: SamplePosition) {}
 }
 
 #[derive(Debug)]
@@ -22,12 +20,12 @@ pub struct ReverseOp { }
 
 #[derive(Debug)]
 pub struct JumpOp {
-    pub offset: OffsetInBlocks,
+    pub offset: SampleOffset,
 }
 
 #[derive(Debug)]
 pub struct RepeatOp {
-    pub loop_size: PositionInBlocks,
+    pub loop_size: SamplePosition,
 }
 
 #[derive(Debug)]
@@ -38,20 +36,15 @@ pub struct SpeedRampOp {
 
 impl Op for ReverseOp {
     fn transform_position(self: &Self,
-                          block_start: &mut PositionInSamples,
-                          block_end: &mut PositionInSamples,
-                          _op_start: PositionInSamples,
-                          _buffer_end: PositionInSamples) {
-        // Play backwards from block_start.
-        let block_length = *block_end - *block_start;
-        *block_end = *block_start;
-        *block_start = *block_end - block_length;
-        println!("reverse-op: Position now ({},{})", *block_start, *block_end);
-    }
-
-    fn transform_block(self: &Self, block: &mut[Sample]) {
-        block.reverse();
-        println!("reverse-op: Reverse block");
+                          position: &mut SamplePosition,
+                          op_start: SamplePosition,
+                          op_end: SamplePosition,
+                          _buffer_end: SamplePosition) {
+        // Mirror position within operation boundary.
+        assert!(op_start <= *position);
+        assert!(op_end >= *position);
+        *position = op_end - (*position - op_start);
+        println!("reverse-op({}-{}): Position now {} )", op_start, op_end, *position);
     }
 }
 
@@ -66,38 +59,32 @@ fn add(u: usize, i: i32) -> usize {
 
 impl Op for JumpOp {
     fn transform_position(self: &Self,
-                          block_start: &mut PositionInSamples,
-                          block_end: &mut PositionInSamples,
-                          _op_start: PositionInSamples,
-                          buffer_end: PositionInSamples) {
-        let block_length = i32::try_from(*block_end - *block_start).unwrap();
-
-        *block_start = add(*block_start, block_length * self.offset) % buffer_end;
-        *block_end = add(*block_end, block_length * self.offset) % buffer_end;
-        println!("jump-op: Position now ({},{})", *block_start, *block_end);
+                          position: &mut SamplePosition,
+                          op_start: SamplePosition,
+                          op_end: SamplePosition,
+                          buffer_end: SamplePosition) {
+        *position = add(*position, self.offset) % buffer_end;
+        println!("jump-op({},{}): Position now {}", op_start, op_end, *position);
     }
 }
 
 impl Op for RepeatOp {
     fn transform_position(self: &Self,
-                          block_start: &mut PositionInSamples,
-                          block_end: &mut PositionInSamples,
-                          op_start: PositionInSamples,
-                          _buffer_end: PositionInSamples) {
-        let block_length = *block_end - *block_start;
-
-        let blocks_since_loop_started = (*block_start - op_start) / block_length;
-        let offset = if blocks_since_loop_started >= self.loop_size {
-            blocks_since_loop_started - (blocks_since_loop_started % self.loop_size)
+                          position: &mut SamplePosition,
+                          op_start: SamplePosition,
+                          op_end: SamplePosition,
+                          _buffer_end: SamplePosition) {
+        let samples_since_loop_started = *position - op_start;
+        let offset = if samples_since_loop_started >= self.loop_size {
+            samples_since_loop_started - (samples_since_loop_started % self.loop_size)
         } else {
             0
         };
-        println!("repeat-op: {} blocks since loop started, loop size {}: go back {}",
-                 blocks_since_loop_started, self.loop_size, offset);
+        println!("repeat-op: {} samples since loop started, loop size {}: go back {}",
+                 samples_since_loop_started, self.loop_size, offset);
 
-        *block_start = *block_start - (block_length * offset);
-        *block_end = *block_end - (block_length * offset);
-        println!("repeat-op: Position now ({},{})", *block_start, *block_end);
+        *position = *position - offset;
+        println!("repeat-op({},{}): Position now {}", op_start, op_end, *position);
     }
 }
 
@@ -126,22 +113,22 @@ impl From<num::ParseIntError> for ParseError {
   }
 }
 
-pub fn new_from_string(line: &str) -> Result<(PositionInBlocks, PositionInBlocks, Box<dyn Op>), ParseError> {
+pub fn new_from_string(line: &str) -> Result<(SamplePosition, SamplePosition, Box<dyn Op>), ParseError> {
     let parts: Vec<&str> = line.split_ascii_whitespace().collect();
 
-    let start = parts[1].parse::<PositionInBlocks>()?;
-    let duration = parts[2].parse::<PositionInBlocks>()?;
+    let start = parts[1].parse::<SamplePosition>()?;
+    let duration = parts[2].parse::<SamplePosition>()?;
 
     match parts[0] {
         "reverse" => {
           Ok((start, duration, Box::new(ReverseOp {})))
         },
         "jump" => {
-          let offset = parts[3].parse::<OffsetInBlocks>()?;
+          let offset = parts[3].parse::<SampleOffset>()?;
           Ok((start, duration, Box::new(JumpOp { offset: offset })))
         },
         "repeat" => {
-          let loop_size = parts[3].parse::<PositionInBlocks>()?;
+          let loop_size = parts[3].parse::<SamplePosition>()?;
           Ok((start, duration, Box::new(RepeatOp { loop_size: loop_size })))
         },
         "speed-ramp" => {

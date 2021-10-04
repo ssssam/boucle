@@ -1,12 +1,12 @@
-use crate::PositionInBlocks;
+use crate::SamplePosition;
 use crate::ops::Op;
 
 use std::fmt;
 
 #[derive(Debug)]
 pub struct Entry {
-    pub start: PositionInBlocks,
-    pub duration: PositionInBlocks,
+    pub start: SamplePosition,
+    pub duration: SamplePosition,
     pub op: Box<dyn Op>,
 }
 
@@ -18,8 +18,8 @@ impl fmt::Display for Entry {
 
 pub type OpSequence = Vec<Entry>;
 
-pub fn op_in_block(entry: &Entry, block_position: PositionInBlocks) -> bool {
-    let result = block_position >= entry.start && block_position < (entry.start + entry.duration);
-    println!("op_in_block: entry ({},{}) block {}: {}", entry.start, entry.duration, block_position, result);
+pub fn op_active(entry: &Entry, position: SamplePosition) -> bool {
+    let result = position >= entry.start && position < (entry.start + entry.duration);
+    println!("op_active: entry ({},{}) position {}: {}", entry.start, entry.duration, position, result);
     return result;
 }

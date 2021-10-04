@@ -3,14 +3,14 @@
 /*pub trait Pattern {
     fn get() -> 
 }*/
-use crate::PositionInBlocks;
+use crate::SamplePosition;
 use crate::ops;
 use crate::op_sequence;
 
 type Beats = u32;
 
 pub trait Pattern {
-    fn op_for_beat(self: &mut Self, beat: Beats, beats_to_blocks: u32) -> Option<op_sequence::Entry>;
+    fn op_for_beat(self: &mut Self, beat: Beats, beats_to_samples: u32) -> Option<op_sequence::Entry>;
 }
 
 pub struct CheckersReverse {
@@ -20,7 +20,7 @@ pub struct CheckersReverse {
 }
 
 impl CheckersReverse {
-    fn new(_bpm: Beats, _block_size: i32) -> CheckersReverse {
+    fn new(_bpm: Beats, _sample_rate: i32) -> CheckersReverse {
         CheckersReverse {
             period: 2,   // Reverse every 2nd beat.
             duration: 1,
@@ -29,11 +29,11 @@ impl CheckersReverse {
 }
 
 impl Pattern for CheckersReverse {
-    fn op_for_beat(self: &mut Self, beat: Beats, beats_to_blocks: u32) -> Option<op_sequence::Entry> {
+    fn op_for_beat(self: &mut Self, beat: Beats, beats_to_samples: u32) -> Option<op_sequence::Entry> {
         if (beat % self.period) == 0 {
             Some(op_sequence::Entry {
-                start: (beat * beats_to_blocks) as PositionInBlocks,
-                duration: (self.duration * beats_to_blocks) as PositionInBlocks,
+                start: (beat * beats_to_samples) as SamplePosition,
+                duration: (self.duration * beats_to_samples) as SamplePosition,
                 op: Box::new(ops::ReverseOp {}),
             })
         } else {

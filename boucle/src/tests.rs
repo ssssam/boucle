@@ -7,7 +7,7 @@ mod tests {
     use crate::op_sequence;
     use crate::OpSequence;
 
-    const TEST_CONFIG: Config = Config { frames_per_block: 4 };
+    const TEST_CONFIG: Config = Config { sample_rate: 44100 };
 
     fn make_buffer(data: &[i16]) -> Vec<Sample> {
         data.iter().map(|s| Sample::from(*s)).collect()
@@ -19,12 +19,12 @@ mod tests {
         let input = make_buffer(&[1,2,3,4, 5,6,7,8, 9,10,11,12, 13,14,15,16]);
 
         let ops: OpSequence = vec!(
-            op_sequence::Entry { start: 1, duration: 2, op: Box::new(ops::ReverseOp {}) },
+            op_sequence::Entry { start: 4, duration: 8, op: Box::new(ops::ReverseOp {}) },
         );
-        let expected_output = make_buffer(&[1,2,3,4, 4,3,2,1, 8,7,6,5, 13,14,15,16]);
+        let expected_output = make_buffer(&[1,2,3,4, 13,12,11,10, 9,8,7,6, 13,14,15,16]);
 
         let mut output: Vec<Sample> = Vec::new();
-        boucle.process_buffer(&input, &ops, &mut |s| output.push(s));
+        boucle.process_buffer(&input, 0, input.len(), &ops, &mut |s| output.push(s));
         assert_eq!(output, expected_output);
     }
 
@@ -34,13 +34,13 @@ mod tests {
         let input = make_buffer(&[1,2,3,4, 5,6,7,8, 9,10,11,12, 13,14,15,16]);
 
         let ops: OpSequence = vec!(
-            op_sequence::Entry { start: 1, duration: 1, op: Box::new(ops::JumpOp { offset: -1}) },
-            op_sequence::Entry { start: 3, duration: 1, op: Box::new(ops::JumpOp { offset: 2}) },
+            op_sequence::Entry { start: 4, duration: 4, op: Box::new(ops::JumpOp { offset: -4}) },
+            op_sequence::Entry { start: 12, duration: 4, op: Box::new(ops::JumpOp { offset: 8}) },
         );
         let expected_output = make_buffer(&[1,2,3,4, 1,2,3,4, 9,10,11,12, 5,6,7,8]);
 
         let mut output: Vec<Sample> = Vec::new();
-        boucle.process_buffer(&input, &ops, &mut |s| output.push(s));
+        boucle.process_buffer(&input, 0, input.len(), &ops, &mut |s| output.push(s));
         assert_eq!(output, expected_output);
     }
 
@@ -50,12 +50,12 @@ mod tests {
         let input = make_buffer(&[1,2,3,4, 5,6,7,8, 9,10,11,12, 13,14,15,16, 17,18,19,20, 21,22,23,24]);
 
         let ops: OpSequence = vec!(
-            op_sequence::Entry { start: 0, duration: 5, op: Box::new(ops::RepeatOp { loop_size: 2}) },
+            op_sequence::Entry { start: 0, duration: 20, op: Box::new(ops::RepeatOp { loop_size: 8}) },
         );
         let expected_output = make_buffer(&[1,2,3,4, 5,6,7,8, 1,2,3,4, 5,6,7,8, 1,2,3,4, 21,22,23,24]);
 
         let mut output: Vec<Sample> = Vec::new();
-        boucle.process_buffer(&input, &ops, &mut |s| output.push(s));
+        boucle.process_buffer(&input, 0, input.len(), &ops, &mut |s| output.push(s));
         assert_eq!(output, expected_output);
     }
 }
