@@ -3,11 +3,12 @@ use crate::ops::Op;
 
 use std::fmt;
 
+#[derive(Clone)]
 #[derive(Debug)]
 pub struct Entry {
     pub start: SamplePosition,
     pub duration: Option<SamplePosition>,
-    pub op: Box<Op + Send>,
+    pub op: Box<dyn Op + Send>,
 }
 
 impl fmt::Display for Entry {
