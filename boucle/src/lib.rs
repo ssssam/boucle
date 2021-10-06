@@ -1,9 +1,11 @@
 pub mod ops;
 pub mod op_sequence;
 pub mod patterns;
+pub mod piano_control;
 mod tests;
 
 pub use op_sequence::OpSequence;
+pub use piano_control::PianoControl;
 
 // This is the sample format used inside the audio engine.
 pub type Sample = f32;
@@ -14,25 +16,26 @@ pub type SamplePosition = usize;
 pub type SampleOffset = isize;
 
 pub struct Config {
-    // FIXME: this is a placeholder right now, it has no effect.
-    pub sample_rate: usize,
+    pub beats_to_samples: f32,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Config {
-            sample_rate: 44100
+            beats_to_samples: 44100.0    /* Assumes 1 beat = 1 second at 44.1KHz */
         }
     }
 }
 
 pub struct Boucle {
-    pub config: Config
+    pub controller: PianoControl,
 }
 
 impl Boucle {
-    pub fn new(config: Config) -> Boucle {
-        return Boucle { config: config }
+    pub fn new(config: &Config) -> Boucle {
+        return Boucle {
+            controller: PianoControl::new(config.beats_to_samples),
+        }
     }
 
     pub fn next_sample(self: &Boucle, loop_buffer: &[Sample], op_sequence: &OpSequence, play_clock: SamplePosition) -> Sample {
