@@ -1,12 +1,12 @@
-use crate::Sample;
 use crate::SamplePosition;
 use crate::SampleOffset;
 
-use std::convert::TryFrom;
 use std::fmt;
 use std::num;
 
-pub trait Op: fmt::Debug {
+use dyn_clone::DynClone;
+
+pub trait Op: fmt::Debug + DynClone {
     // Return a +/- delta that will be applied to `play_clock` to represent this operation.
     fn get_transform(self: &Self,
                      _play_clock: SamplePosition,
@@ -17,19 +17,25 @@ pub trait Op: fmt::Debug {
     }
 }
 
+dyn_clone::clone_trait_object!(Op);
+
+#[derive(Clone)]
 #[derive(Debug)]
 pub struct ReverseOp { }
 
+#[derive(Clone)]
 #[derive(Debug)]
 pub struct JumpOp {
     pub offset: SampleOffset,
 }
 
+#[derive(Clone)]
 #[derive(Debug)]
 pub struct RepeatOp {
     pub loop_size: SamplePosition,
 }
 
+#[derive(Clone)]
 #[derive(Debug)]
 pub struct SpeedRampOp {
     start_speed: f32,
