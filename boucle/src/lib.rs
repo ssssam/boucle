@@ -4,6 +4,8 @@ pub mod patterns;
 pub mod piano_control;
 mod tests;
 
+use log::*;
+
 pub use op_sequence::OpSequence;
 pub use piano_control::PianoControl;
 
@@ -51,13 +53,13 @@ impl Boucle {
 
         let mut loop_position = 0;
         if transformed_clock < 0 {
-            println!("transforming {}", transformed_clock.saturating_abs() as usize%loop_length);
+            debug!("transforming {}", transformed_clock.saturating_abs() as usize%loop_length);
             loop_position = (loop_length - ((transformed_clock.saturating_abs() as SamplePosition) % loop_length)) % loop_length;
         } else {
             loop_position = (transformed_clock as SamplePosition) % loop_length;
         }
 
-        println!("clock time {}, transformed to {}, loop pos {}", play_clock, transformed_clock, loop_position);
+        debug!("clock time {}, transformed to {}, loop pos {}", play_clock, transformed_clock, loop_position);
         return loop_buffer[loop_position];
     }
 
@@ -68,7 +70,7 @@ impl Boucle {
                           ops: &OpSequence,
                           write_sample: &mut dyn FnMut(Sample)) {
         let loop_length = loop_buffer.len();
-        println!("Buffer is {} samples long, playing at {} for {}", loop_length, play_clock, out_buffer_length);
+        info!("Buffer is {} samples long, playing at {} for {}", loop_length, play_clock, out_buffer_length);
 
         for offset in 0..out_buffer_length {
             let s = self.next_sample(&loop_buffer, ops, play_clock + offset);

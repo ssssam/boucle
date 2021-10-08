@@ -5,6 +5,7 @@ use std::fmt;
 use std::num;
 
 use dyn_clone::DynClone;
+use log::*;
 
 pub trait Op: fmt::Debug + DynClone {
     // Return a +/- delta that will be applied to `play_clock` to represent this operation.
@@ -58,7 +59,7 @@ impl Op for ReverseOp {
                      loop_length: SamplePosition) -> SampleOffset {
         let op_active_time = play_clock - op_start;
         let transform = -(op_active_time as SampleOffset) * 2;
-        println!("reverse-op({}): clock {}, active time = {}, transform {}", op_start, play_clock, op_active_time, transform);
+        debug!("reverse-op({}): clock {}, active time = {}, transform {}", op_start, play_clock, op_active_time, transform);
         return transform;
     }
 }
@@ -79,8 +80,8 @@ impl Op for RepeatOp {
             offset = (cycle_count) * inner_loop_size;
         }
         let transform: SampleOffset = -offset as SampleOffset;
-        println!("repeat-op: delta {}, inner loop size {}: cycle count {}, offset {}, tf {}",
-                 delta, self.loop_size, cycle_count, offset, transform);
+        debug!("repeat-op: delta {}, inner loop size {}: cycle count {}, offset {}, tf {}",
+               delta, self.loop_size, cycle_count, offset, transform);
         return transform;
     }
 }

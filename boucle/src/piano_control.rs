@@ -5,6 +5,8 @@ use crate::ops::*;
 use crate::op_sequence;
 use crate::op_sequence::OpSequence;
 
+use log::*;
+
 use std::collections::HashMap;
 
 type MidiNote = u8;
@@ -177,25 +179,25 @@ impl PianoControl {
                 match op {
                     Operation::Reverse => {
                         if is_note_on(event.status) && self.active_reverse.is_none() {
-                            println!("{}: reverse on", event.timestamp);
+                            debug!("{}: reverse on", event.timestamp);
                             self.active_reverse = Some(op_sequence::Entry {
                                 start: event.timestamp,
                                 duration: None,
                                 op: Box::new(ReverseOp {})
                             });
                         } else if is_note_off(event.status) && matches!(self.active_reverse, Some(_)) {
-                            println!("{}: reverse off", event.timestamp);
+                            debug!("{}: reverse off", event.timestamp);
                             let mut op_entry: op_sequence::Entry = self.active_reverse.take().unwrap();
                             op_entry.duration = Some(event.timestamp - op_entry.start);
                             op_sequence.push(op_entry);
                         } else {
-                            println!("Warning: mismatched note on/off for {:?}", event.note);
+                            warn!("Warning: mismatched note on/off for {:?}", event.note);
                         }
                     },
 
                     Operation::Repeat { loop_size } => {
                         if is_note_on(event.status) && !self.active_repeats.contains_key(&event.note) {
-                            println!("{}: repeat({}) on", event.timestamp, loop_size);
+                            debug!("{}: repeat({}) on", event.timestamp, loop_size);
                             self.active_repeats.insert(event.note, op_sequence::Entry {
                                 start: event.timestamp,
                                 duration: None,
@@ -204,12 +206,12 @@ impl PianoControl {
                                 })
                             });
                         } else if is_note_off(event.status) && self.active_repeats.contains_key(&event.note) {
-                            println!("{}: repeat({}) on", event.timestamp, loop_size);
+                            debug!("{}: repeat({}) on", event.timestamp, loop_size);
                             let mut op_entry: op_sequence::Entry = self.active_repeats.remove(&event.note).unwrap();
                             op_entry.duration = Some(event.timestamp - op_entry.start);
                             op_sequence.push(op_entry);
                         } else {
-                            println!("Warning: mismatched note on/off for {:?}", event.note);
+                            warn!("Warning: mismatched note on/off for {:?}", event.note);
                         }
                     }
 
@@ -273,12 +275,12 @@ impl PianoControl {
         // Include all ops which are still active at end, including any that started in the past
         if matches!(self.active_reverse, Some(_)) {
             let op_entry: op_sequence::Entry = self.active_reverse.as_ref().unwrap().clone();
-            println!("{}: reverse on since ", op_entry.start);
+            debug!("{}: reverse on since ", op_entry.start);
             op_sequence.push(op_entry);
         }
 
         for op_entry in self.active_repeats.values() {
-            println!("{}: repeat on since", op_entry.start);
+            debug!("{}: repeat on since", op_entry.start);
             op_sequence.push(op_entry.clone());
         }
 
