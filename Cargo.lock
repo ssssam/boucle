@@ -169,7 +169,9 @@ dependencies = [
  "clap",
  "cpal",
  "dasp",
+ "env_logger",
  "hound",
+ "log",
  "portmidi",
 ]
 

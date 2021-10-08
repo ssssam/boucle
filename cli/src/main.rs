@@ -9,6 +9,7 @@ use clap::{Arg, App};
 use cpal::traits::{DeviceTrait, HostTrait};
 use dasp::{Sample};
 use hound;
+use log::*;
 use portmidi::{PortMidi};
 
 use std::fs::File;
@@ -64,7 +65,7 @@ fn input_wav_to_buffer(audio_in_path: &str) -> Result<boucle::Buffer, hound::Err
         panic!("Input WAV file must be mono (got {} channels", spec.channels);
     }
 
-    println!("Read input {}: {:?}", audio_in_path, spec);
+    info!("Read input {}: {:?}", audio_in_path, spec);
     let buffer: boucle::Buffer = match spec.sample_format {
         hound::SampleFormat::Int => {
             let samples = reader
@@ -85,7 +86,7 @@ fn input_wav_to_buffer(audio_in_path: &str) -> Result<boucle::Buffer, hound::Err
 fn run_batch(audio_in_path: &str, audio_out: &str, operations_file: &str) {
     let op_sequence = read_ops(&operations_file).expect("Failed to read ops");
     for op in &op_sequence {
-        println!("{}", op);
+        debug!("{}", op);
     }
 
     let buffer = input_wav_to_buffer(audio_in_path).expect("Failed to read input");
@@ -114,7 +115,7 @@ fn get_audio_config(device: &cpal::Device) -> cpal::SupportedStreamConfig {
     let supported_config = supported_configs_range.next()
         .expect("no supported config")
         .with_sample_rate(cpal::SampleRate(SAMPLE_RATE));
-    println!("audio config: {:?}", supported_config);
+    info!("audio config: {:?}", supported_config);
     return supported_config;
 }
 
@@ -127,7 +128,7 @@ fn open_out_stream<T: cpal::Sample>(device: cpal::Device,
         move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
             let mut buffers = buffers_rc.lock().unwrap();
             let block_size = data.len();
-            println!("Block size: {}, play time: {}", block_size, buffers.play_clock);
+            debug!("Block size: {}, play time: {}", block_size, buffers.play_clock);
 
             // Actual boucle!
             let mut boucle = boucle_rc.lock().unwrap();
@@ -147,7 +148,7 @@ fn open_out_stream<T: cpal::Sample>(device: cpal::Device,
 
             buffers.play_clock = buffers.play_clock + block_size;
         },
-        move |err| { println!("{}", err) }
+        move |err| { warn!("{}", err) }
     ).unwrap());
 }
 
@@ -259,6 +260,8 @@ fn calculate_loop_time(seconds: Option<f32>, beats: Option<f32>, bpm: Option<f32
 }
 
 fn main() {
+    env_logger::init();
+
     let app_m = App::new("Boucle looper")
         .version("1.0")
         .subcommand(App::new("live")

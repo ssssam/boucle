@@ -159,6 +159,7 @@ impl PianoControl {
             return;
         }
 
+        info!("recorded event {} {} at clock {}", midi_event_status, midi_event_note, play_clock);
         self.event_buffer.push(RecordedMidiEvent {
             timestamp: play_clock,
             status: midi_event_status,
@@ -172,10 +173,14 @@ impl PianoControl {
                           end_time: SamplePosition) -> OpSequence {
         let mut op_sequence: OpSequence = OpSequence::new();
 
-        for i in 0..self.event_buffer.len() {
-            let event = &mut self.event_buffer[i];
+        let mut i = 0;
+        debug!("processing {} recorded events between {} and {}", self.event_buffer.len(), start_time, end_time);
+        while (i < self.event_buffer.len()) {
+            let event = &self.event_buffer[i];
+
             if event.timestamp >= start_time && event.timestamp < end_time {
                 let op: Operation = OP1::note_to_op(event.note);
+                info!("Matched at {}", event.timestamp);
                 match op {
                     Operation::Reverse => {
                         if is_note_on(event.status) && self.active_reverse.is_none() {
@@ -213,10 +218,16 @@ impl PianoControl {
                         } else {
                             warn!("Warning: mismatched note on/off for {:?}", event.note);
                         }
-                    }
+                    },
 
-                    _ => {},
+                    _ => {}
                 }
+
+                self.event_buffer.remove(i);
+            } else {
+                i += 1;
+            }
+        };
 
                 // inverting that...
                 // switch what the key is
@@ -267,10 +278,6 @@ impl PianoControl {
                 //    maybe so!
                 //    what happens if you change from 1 to 4?
                 //      end the one op, and create a new op... I guess
-            }
-
-            self.event_buffer.remove(i);
-        }
 
         // Include all ops which are still active at end, including any that started in the past
         if matches!(self.active_reverse, Some(_)) {
