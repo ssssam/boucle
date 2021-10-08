@@ -16,7 +16,7 @@ use std::fs::File;
 use std::io;
 use std::io::Read;use std::thread::sleep;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 enum InputBuffer { A, B }
 
@@ -26,8 +26,6 @@ struct LoopBuffers {
     input_b: boucle::Buffer,
     current_input: InputBuffer,
     output: boucle::Buffer,
-    play_clock: usize,
-    control_clock: usize,
     record_pos: usize,
 }
 
@@ -39,20 +37,22 @@ fn create_buffers(buffer_size_samples: usize) -> LoopBuffers {
         current_input: InputBuffer::A,
         record_pos: 0,
         output: vec!(0.0; buffer_size_samples),
-        play_clock: 0,
-        control_clock: 0,
     };
     return this;
 }
 
-fn read_ops(file_name: &str) -> Result<OpSequence, io::Error> {
+fn read_ops(start_time: Instant, file_name: &str) -> Result<OpSequence, io::Error> {
     let mut text = String::new();
     let mut op_sequence = OpSequence::new();
     let mut file = File::open(file_name)?;
     file.read_to_string(&mut text)?;
     for line in text.lines() {
-        let (start, duration, op) = boucle::ops::new_from_string(line).expect("Failed to parse line");
-        op_sequence.push(op_sequence::Entry { start, duration: Some(duration), op });
+        let (start_seconds, duration_seconds, op) = boucle::ops::new_from_string(line).expect("Failed to parse line");
+        op_sequence.push(op_sequence::Entry {
+            start: start_time + Duration::from_nanos((start_seconds * 1000000000.0) as u64),
+            duration: Some(Duration::from_nanos((duration_seconds * 1000000000.0) as u64)),
+            op
+        });
     }
     return Ok(op_sequence);
 }
@@ -84,7 +84,9 @@ fn input_wav_to_buffer(audio_in_path: &str) -> Result<boucle::Buffer, hound::Err
 }
 
 fn run_batch(audio_in_path: &str, audio_out: &str, operations_file: &str) {
-    let op_sequence = read_ops(&operations_file).expect("Failed to read ops");
+    let epoch = Instant::now();
+
+    let op_sequence = read_ops(epoch, &operations_file).expect("Failed to read ops");
     for op in &op_sequence {
         debug!("{}", op);
     }
@@ -99,8 +101,9 @@ fn run_batch(audio_in_path: &str, audio_out: &str, operations_file: &str) {
     };
     let mut writer = hound::WavWriter::create(audio_out, out_spec).unwrap();
 
-    let boucle: boucle::Boucle = boucle::Boucle::new(&boucle::Config::default());
-    boucle.process_buffer(&buffer, 0, buffer.len(), &op_sequence, &mut |s| {
+    let mut boucle: boucle::Boucle = boucle::Boucle::new(&boucle::Config::default());
+    boucle.set_start_time(epoch);
+    boucle.process_buffer(&buffer, epoch, buffer.len(), &op_sequence, &mut |s| {
         let s_i16 = s.to_sample::<i16>();
         writer.write_sample(s_i16).unwrap();
     });
@@ -126,13 +129,17 @@ fn open_out_stream<T: cpal::Sample>(device: cpal::Device,
     return Box::new(device.build_output_stream(
         &config,
         move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
-            let mut buffers = buffers_rc.lock().unwrap();
-            let block_size = data.len();
-            debug!("Block size: {}, play time: {}", block_size, buffers.play_clock);
+            let now = Instant::now();
 
-            // Actual boucle!
             let mut boucle = boucle_rc.lock().unwrap();
-            let ops = boucle.controller.ops_for_period(buffers.play_clock, buffers.play_clock + block_size);
+            let buffers = buffers_rc.lock().unwrap();
+
+            let boucle_start_time = boucle.start_time;
+            let block_size = data.len();
+            let block_duration = Duration::from_nanos((block_size as u64 * 1000000000) / boucle.sample_rate);
+            debug!("Block size: {}, duration {:#?}, play time: {:#?}", block_size, block_duration, now);
+
+            let ops = boucle.controller.ops_for_period(boucle_start_time, now, block_duration);
 
             let in_buffer = match buffers.current_input {
                 InputBuffer::A => &buffers.input_a,
@@ -140,13 +147,11 @@ fn open_out_stream<T: cpal::Sample>(device: cpal::Device,
             };
 
             let mut out_pos = 0;
-            boucle.process_buffer(&in_buffer, buffers.play_clock, data.len(),
+            boucle.process_buffer(&in_buffer, now, data.len(),
                                   &ops, &mut |s| {
                 data[out_pos] = cpal::Sample::from(&s);
                 out_pos += 1;
             });
-
-            buffers.play_clock = buffers.play_clock + block_size;
         },
         move |err| { warn!("{}", err) }
     ).unwrap());
@@ -178,6 +183,7 @@ fn run_live(midi_in_port: i32, audio_in_path: &str, loop_time_seconds: f32, bpm:
     let input_wav_buffer = input_wav_to_buffer(audio_in_path).expect("Failed to read input");
 
     let config = boucle::Config {
+        sample_rate: SAMPLE_RATE as u64,
         beats_to_samples: (bpm / 60.0) * (SAMPLE_RATE as f32)
     };
 
@@ -203,25 +209,22 @@ fn run_live(midi_in_port: i32, audio_in_path: &str, loop_time_seconds: f32, bpm:
 
     //audio_out_stream.play().unwrap();
 
-    let mut pushed_reverse: bool = false; // for testing
-
+    {
+        // thunderbirds are go!
+        let mut boucle = boucle_rc.lock().unwrap();
+        boucle.set_start_time(Instant::now());
+    }
     while let Ok(_) = midi_in.poll() {
         if let Ok(Some(event)) = midi_in.read_n(1024) {
             let buffers = buf_rc.lock().unwrap();
             let event2: &portmidi::MidiEvent = event.get(0).unwrap();
 
             let mut boucle = boucle_rc.lock().unwrap();
-            boucle.controller.record_midi_event(buffers.control_clock, event2.message.status, event2.message.data1);
+            boucle.controller.record_midi_event(Instant::now(), event2.message.status, event2.message.data1);
         }
 
         // there is no blocking receive method in PortMidi
         sleep(Duration::from_millis(10));
-
-        // Measure the time passing in a hopefully accurate way...
-        // FIXME: most likely we should use a single monotonic clock based off the system clock,
-        // rather than trying to keep time inside a thread
-        let mut buffers = buf_rc.lock().unwrap();
-        buffers.control_clock += (SAMPLE_RATE as f32 * 0.010).floor() as usize;
     }
 
     return Ok(())
@@ -237,6 +240,7 @@ fn run_list_ports() -> Result<(), portmidi::Error> {
 
     return Ok(())
 }
+
 
 fn parse_f32_option(string: Option<&str>) -> Option<f32> {
     return match string {

@@ -45,9 +45,9 @@ pub struct SpeedRampOp {
 
 impl Op for JumpOp {
     fn get_transform(self: &Self,
-                          play_clock: SamplePosition,
-                          op_start: SamplePosition,
-                          loop_length: SamplePosition) -> SampleOffset {
+                          _play_clock: SamplePosition,
+                          _op_start: SamplePosition,
+                          _loop_length: SamplePosition) -> SampleOffset {
         return self.offset;
     }
 }
@@ -111,11 +111,11 @@ impl From<num::ParseIntError> for ParseError {
   }
 }
 
-pub fn new_from_string(line: &str) -> Result<(SamplePosition, SamplePosition, Box<dyn Op + Send>), ParseError> {
+pub fn new_from_string(line: &str) -> Result<(f64, f64, Box<dyn Op + Send>), ParseError> {
     let parts: Vec<&str> = line.split_ascii_whitespace().collect();
 
-    let start = parts[1].parse::<SamplePosition>()?;
-    let duration = parts[2].parse::<SamplePosition>()?;
+    let start = parts[1].parse::<f64>()?;
+    let duration = parts[2].parse::<f64>()?;
 
     match parts[0] {
         "reverse" => {

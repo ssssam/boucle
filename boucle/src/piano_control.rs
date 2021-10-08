@@ -1,6 +1,5 @@
 // Control Boucle using a piano keyboard.
 
-use crate::SamplePosition;
 use crate::ops::*;
 use crate::op_sequence;
 use crate::op_sequence::OpSequence;
@@ -8,6 +7,7 @@ use crate::op_sequence::OpSequence;
 use log::*;
 
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
 type MidiNote = u8;
 
@@ -63,13 +63,14 @@ pub enum Operation {
 }
 
 struct RecordedMidiEvent {
-    timestamp: usize,
+    timestamp: Instant,
     status: u8,
     note: MidiNote,
 }
 
 pub struct PianoControl {
     event_buffer: Vec<RecordedMidiEvent>,
+
     beats_to_samples: f32,
 
     active_reverse: Option<op_sequence::Entry>,
@@ -148,7 +149,7 @@ impl PianoControl {
 
     // Record MIDI events as they are received.
     pub fn record_midi_event(self: &mut PianoControl,
-                             play_clock: SamplePosition,
+                             timestamp: std::time::Instant,
                              midi_event_status: u8,
                              midi_event_note: u8) {
         if midi_event_note < Note::NOTE_C4 || midi_event_note > Note::NOTE_C6 {
@@ -159,9 +160,9 @@ impl PianoControl {
             return;
         }
 
-        info!("recorded event {} {} at clock {}", midi_event_status, midi_event_note, play_clock);
+        info!("recorded event {} {} at clock {:#?}", midi_event_status, midi_event_note, timestamp);
         self.event_buffer.push(RecordedMidiEvent {
-            timestamp: play_clock,
+            timestamp,
             status: midi_event_status,
             note: midi_event_note,
         });
@@ -169,31 +170,31 @@ impl PianoControl {
 
     // Turn recorded MIDI events into Boucle operations, for a given time period.
     pub fn ops_for_period(self: &mut PianoControl,
-                          start_time: SamplePosition,
-                          end_time: SamplePosition) -> OpSequence {
+                          loop_start_time: Instant,
+                          period_start: Instant,
+                          period_duration: Duration) -> OpSequence {
         let mut op_sequence: OpSequence = OpSequence::new();
 
         let mut i = 0;
-        debug!("processing {} recorded events between {} and {}", self.event_buffer.len(), start_time, end_time);
-        while (i < self.event_buffer.len()) {
+        while i < self.event_buffer.len() {
             let event = &self.event_buffer[i];
 
-            if event.timestamp >= start_time && event.timestamp < end_time {
+            if event.timestamp >= period_start && event.timestamp < (period_start + period_duration) {
                 let op: Operation = OP1::note_to_op(event.note);
-                info!("Matched at {}", event.timestamp);
+                info!("Matched at {:#?}", event.timestamp);
                 match op {
                     Operation::Reverse => {
                         if is_note_on(event.status) && self.active_reverse.is_none() {
-                            debug!("{}: reverse on", event.timestamp);
+                            debug!("{:#?}: reverse on", event.timestamp);
                             self.active_reverse = Some(op_sequence::Entry {
                                 start: event.timestamp,
                                 duration: None,
                                 op: Box::new(ReverseOp {})
                             });
                         } else if is_note_off(event.status) && matches!(self.active_reverse, Some(_)) {
-                            debug!("{}: reverse off", event.timestamp);
+                            debug!("{:#?}: reverse off", event.timestamp);
                             let mut op_entry: op_sequence::Entry = self.active_reverse.take().unwrap();
-                            op_entry.duration = Some(event.timestamp - op_entry.start);
+                            op_entry.duration = Some(event.timestamp.duration_since(op_entry.start));
                             op_sequence.push(op_entry);
                         } else {
                             warn!("Warning: mismatched note on/off for {:?}", event.note);
@@ -202,7 +203,7 @@ impl PianoControl {
 
                     Operation::Repeat { loop_size } => {
                         if is_note_on(event.status) && !self.active_repeats.contains_key(&event.note) {
-                            debug!("{}: repeat({}) on", event.timestamp, loop_size);
+                            debug!("{:#?}: repeat({}) on", event.timestamp, loop_size);
                             self.active_repeats.insert(event.note, op_sequence::Entry {
                                 start: event.timestamp,
                                 duration: None,
@@ -211,9 +212,9 @@ impl PianoControl {
                                 })
                             });
                         } else if is_note_off(event.status) && self.active_repeats.contains_key(&event.note) {
-                            debug!("{}: repeat({}) on", event.timestamp, loop_size);
+                            debug!("{:#?}: repeat({}) on", event.timestamp, loop_size);
                             let mut op_entry: op_sequence::Entry = self.active_repeats.remove(&event.note).unwrap();
-                            op_entry.duration = Some(event.timestamp - op_entry.start);
+                            op_entry.duration = Some(event.timestamp.duration_since(op_entry.start));
                             op_sequence.push(op_entry);
                         } else {
                             warn!("Warning: mismatched note on/off for {:?}", event.note);
@@ -282,12 +283,12 @@ impl PianoControl {
         // Include all ops which are still active at end, including any that started in the past
         if matches!(self.active_reverse, Some(_)) {
             let op_entry: op_sequence::Entry = self.active_reverse.as_ref().unwrap().clone();
-            debug!("{}: reverse on since ", op_entry.start);
+            debug!("{:#?}: reverse on since ", op_entry.start);
             op_sequence.push(op_entry);
         }
 
         for op_entry in self.active_repeats.values() {
-            debug!("{}: repeat on since", op_entry.start);
+            debug!("{:#?}: repeat on since", op_entry.start);
             op_sequence.push(op_entry.clone());
         }
 
