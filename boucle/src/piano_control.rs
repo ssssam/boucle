@@ -86,35 +86,35 @@ mod OP1 {
 
     pub fn note_to_op(note: MidiNote) -> Operation {
         match note {
-            Note::NOTE_F4 => Operation::Jump { offset: -16.0 },
-            Note::NOTE_Gb4 => Operation::Jump { offset: -8.0 },
-            Note::NOTE_G4 => Operation::Jump { offset: -4.0 },
-            Note::NOTE_Ab4 => Operation::Jump { offset: -2.0 },
-            Note::NOTE_A4 => Operation::Jump { offset: -1.0 },
+            Note::NOTE_F4 => Operation::Jump { offset: -8.0 },
+            Note::NOTE_Gb4 => Operation::Jump { offset: -4.0 },
+            Note::NOTE_G4 => Operation::Jump { offset: -2.0 },
+            Note::NOTE_Ab4 => Operation::Jump { offset: -1.0 },
+            Note::NOTE_A4 => Operation::Jump { offset: -0.5 },
             Note::NOTE_Bb4 => Operation::NoOp,
-            Note::NOTE_B4 => Operation::Jump { offset: -0.5 },
+            Note::NOTE_B4 => Operation::Jump { offset: -0.25 },
 
-            Note::NOTE_C5 => Operation::Repeat { loop_size: 0.125 },
-            Note::NOTE_Db5 => Operation::Repeat { loop_size: 0.25 },
-            Note::NOTE_D5 => Operation::Repeat { loop_size: 0.5 },
-            Note::NOTE_Eb5 => Operation::Repeat { loop_size: 1.0 },
+            Note::NOTE_C5 => Operation::Repeat { loop_size: 0.0625 },
+            Note::NOTE_Db5 => Operation::Repeat { loop_size: 0.125 },
+            Note::NOTE_D5 => Operation::Repeat { loop_size: 0.25 },
+            Note::NOTE_Eb5 => Operation::Repeat { loop_size: 0.5 },
 
             Note::NOTE_E5 => Operation::Reverse,
             Note::NOTE_F5 => Operation::NoOp,
 
-            Note::NOTE_Gb5 => Operation::Repeat { loop_size: 2.0 },
-            Note::NOTE_G5 => Operation::Repeat { loop_size: 4.0 },
-            Note::NOTE_Ab5 => Operation::Repeat { loop_size: 8.0 },
-            Note::NOTE_A5 => Operation::Repeat { loop_size: 16.0 },
+            Note::NOTE_Gb5 => Operation::Repeat { loop_size: 1.0 },
+            Note::NOTE_G5 => Operation::Repeat { loop_size: 2.0 },
+            Note::NOTE_Ab5 => Operation::Repeat { loop_size: 4.0 },
+            Note::NOTE_A5 => Operation::Repeat { loop_size: 8.0 },
 
             Note::NOTE_Bb5 => Operation::NoOp,
 
-            Note::NOTE_B5 => Operation::Jump { offset: 0.5 },
-            Note::NOTE_C6 => Operation::Jump { offset: 1.0 },
-            Note::NOTE_Db6 => Operation::Jump { offset: 2.0 },
-            Note::NOTE_D6 => Operation::Jump { offset: 4.0 },
-            Note::NOTE_Eb6 => Operation::Jump { offset: 8.0 },
-            Note::NOTE_E6 => Operation::Jump { offset: 16.0 },
+            Note::NOTE_B5 => Operation::Jump { offset: 0.25 },
+            Note::NOTE_C6 => Operation::Jump { offset: 0.5 },
+            Note::NOTE_Db6 => Operation::Jump { offset: 1.0 },
+            Note::NOTE_D6 => Operation::Jump { offset: 2.0 },
+            Note::NOTE_Eb6 => Operation::Jump { offset: 4.0 },
+            Note::NOTE_E6 => Operation::Jump { offset: 8.0 },
 
             _ => Operation::NoOp,
         }
@@ -152,7 +152,7 @@ impl PianoControl {
                              timestamp: std::time::Instant,
                              midi_event_status: u8,
                              midi_event_note: u8) {
-        if midi_event_note < Note::NOTE_C4 || midi_event_note > Note::NOTE_C6 {
+        if midi_event_note < Note::NOTE_C4 || midi_event_note > Note::NOTE_E6 {
             return;
         }
 
@@ -188,14 +188,14 @@ impl PianoControl {
                 match op {
                     Operation::Reverse => {
                         if is_note_on(event.status) && self.active_reverse.is_none() {
-                            debug!("{:#?}: reverse on", event.timestamp);
+                            info!("{:#?}: reverse on", event.timestamp);
                             self.active_reverse = Some(op_sequence::Entry {
                                 start: event.timestamp,
                                 duration: None,
                                 op: Box::new(ReverseOp {})
                             });
                         } else if is_note_off(event.status) && matches!(self.active_reverse, Some(_)) {
-                            debug!("{:#?}: reverse off", event.timestamp);
+                            info!("{:#?}: reverse off", event.timestamp);
                             let mut op_entry: op_sequence::Entry = self.active_reverse.take().unwrap();
                             op_entry.duration = Some(event.timestamp.duration_since(op_entry.start));
                             op_sequence.push(op_entry);
@@ -206,7 +206,7 @@ impl PianoControl {
 
                     Operation::Repeat { loop_size } => {
                         if is_note_on(event.status) && !self.active_repeats.contains_key(&event.note) {
-                            debug!("{:#?}: repeat({}) on", event.timestamp, loop_size);
+                            info!("{:#?}: repeat({}) on", event.timestamp, loop_size);
                             self.active_repeats.insert(event.note, op_sequence::Entry {
                                 start: event.timestamp,
                                 duration: None,
@@ -215,7 +215,7 @@ impl PianoControl {
                                 })
                             });
                         } else if is_note_off(event.status) && self.active_repeats.contains_key(&event.note) {
-                            debug!("{:#?}: repeat({}) on", event.timestamp, loop_size);
+                            info!("{:#?}: repeat({}) on", event.timestamp, loop_size);
                             let mut op_entry: op_sequence::Entry = self.active_repeats.remove(&event.note).unwrap();
                             op_entry.duration = Some(event.timestamp.duration_since(op_entry.start));
                             op_sequence.push(op_entry);
@@ -224,6 +224,25 @@ impl PianoControl {
                         }
                     },
 
+                    Operation::Jump { offset } => {
+                        if is_note_on(event.status) && !self.active_jumps.contains_key(&event.note) {
+                            info!("{:#?}: jumps({}) on", event.timestamp, offset);
+                            self.active_jumps.insert(event.note, op_sequence::Entry {
+                                start: event.timestamp,
+                                duration: None,
+                                op: Box::new(JumpOp {
+                                    offset: (offset * self.beats_to_samples).floor() as isize
+                                })
+                            });
+                        } else if is_note_off(event.status) && self.active_jumps.contains_key(&event.note) {
+                            info!("{:#?}: repeat({}) on", event.timestamp, offset);
+                            let mut op_entry: op_sequence::Entry = self.active_jumps.remove(&event.note).unwrap();
+                            op_entry.duration = Some(event.timestamp.duration_since(op_entry.start));
+                            op_sequence.push(op_entry);
+                        } else {
+                            warn!("Warning: mismatched note on/off for {:?}", event.note);
+                        }
+                    },
                     _ => {}
                 }
 
@@ -232,56 +251,6 @@ impl PianoControl {
                 i += 1;
             }
         };
-
-                // inverting that...
-                // switch what the key is
-                //     if its reversekey
-                //         if no reverse op & its noteon
-                //             update_reverse(on)
-                //         elseif reverseop & its noteoff
-                //             end reverse
-                //         else
-                //             stray noteon/off
-                //
-
-                // if event is note-on:
-                //     switch what the note is
-                //         if its reversekey
-                //             if no reverse op
-                //                 update_reverse(on) create active reverseop with starttime 
-                //             else
-                //                 warn - we got 2xnoteon without noteoff
-                //         if its a repeatkey
-                //              if no active repeat op
-                //                  create active repeatop with starttime
-                //              elseif active repeat op and key matches active op
-                //                  warn - we got 2xnoteon without noteoff
-                //              else
-                //                  update loop_size on active repeatop
-                //         if its a reljumpkey
-                //              ... like repeat...
-                // if event is note-off
-                //     switch what key the note is
-                //         if its reversekey
-                //             if active reverseop
-                //                 set endtime of active reverseop
-                //                 add active reverseop to result
-                //                 set active reverseop to None
-                //             else
-                //                 warn - we got 2xnoteoff without noteon
-                //         if its a repeatkey
-                //             if active repeatop and key matches active op
-                //                 set endtime, add to result, no active repeat
-                //             elseif active repeatop
-                //                 warn - got 2xnoteoff without noteon
-                //
-
-
-                // What about COMBINING KEYS?!?!!
-                //    e.g. repeat 1beat + repeat 4beat - should be repeat 5beat?! right?!
-                //    maybe so!
-                //    what happens if you change from 1 to 4?
-                //      end the one op, and create a new op... I guess
 
         // Include all ops which are still active at end, including any that started in the past
         if matches!(self.active_reverse, Some(_)) {
@@ -295,6 +264,10 @@ impl PianoControl {
             op_sequence.push(op_entry.clone());
         }
 
+        for op_entry in self.active_jumps.values() {
+            debug!("{:#?}: jumps on since", op_entry.start);
+            op_sequence.push(op_entry.clone());
+        }
         return op_sequence;
     }
 }
