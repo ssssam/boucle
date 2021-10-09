@@ -139,7 +139,7 @@ fn open_out_stream<T: cpal::Sample>(device: cpal::Device,
             let block_duration = Duration::from_nanos((block_size as u64 * 1000000000) / boucle.sample_rate);
             debug!("Block size: {}, duration {:#?}, play time: {:#?}", block_size, block_duration, now);
 
-            let ops = boucle.controller.ops_for_period(boucle_start_time, now, block_duration);
+            let ops = boucle.controller.ops_for_period(boucle_start_time, now - block_duration, block_duration);
 
             let in_buffer = match buffers.current_input {
                 InputBuffer::A => &buffers.input_a,

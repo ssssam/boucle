@@ -179,6 +179,8 @@ impl PianoControl {
         while i < self.event_buffer.len() {
             let event = &self.event_buffer[i];
 
+            // FIXME: need to process events from before buffer started, so we don't drop
+            // events if we miss an audio buffer.
             if event.timestamp >= period_start && event.timestamp < (period_start + period_duration) {
                 let op: Operation = OP1::note_to_op(event.note);
                 info!("Matched at {:#?}", event.timestamp);
