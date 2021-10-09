@@ -1,12 +1,13 @@
-use crate::Sample;
 use crate::SamplePosition;
 use crate::SampleOffset;
 
-use std::convert::TryFrom;
 use std::fmt;
 use std::num;
 
-pub trait Op: fmt::Debug {
+use dyn_clone::DynClone;
+use log::*;
+
+pub trait Op: fmt::Debug + DynClone {
     // Return a +/- delta that will be applied to `play_clock` to represent this operation.
     fn get_transform(self: &Self,
                      _play_clock: SamplePosition,
@@ -17,19 +18,25 @@ pub trait Op: fmt::Debug {
     }
 }
 
+dyn_clone::clone_trait_object!(Op);
+
+#[derive(Clone)]
 #[derive(Debug)]
 pub struct ReverseOp { }
 
+#[derive(Clone)]
 #[derive(Debug)]
 pub struct JumpOp {
     pub offset: SampleOffset,
 }
 
+#[derive(Clone)]
 #[derive(Debug)]
 pub struct RepeatOp {
     pub loop_size: SamplePosition,
 }
 
+#[derive(Clone)]
 #[derive(Debug)]
 pub struct SpeedRampOp {
     start_speed: f32,
@@ -38,9 +45,9 @@ pub struct SpeedRampOp {
 
 impl Op for JumpOp {
     fn get_transform(self: &Self,
-                          play_clock: SamplePosition,
-                          op_start: SamplePosition,
-                          loop_length: SamplePosition) -> SampleOffset {
+                          _play_clock: SamplePosition,
+                          _op_start: SamplePosition,
+                          _loop_length: SamplePosition) -> SampleOffset {
         return self.offset;
     }
 }
@@ -52,7 +59,7 @@ impl Op for ReverseOp {
                      loop_length: SamplePosition) -> SampleOffset {
         let op_active_time = play_clock - op_start;
         let transform = -(op_active_time as SampleOffset) * 2;
-        println!("reverse-op({}): clock {}, active time = {}, transform {}", op_start, play_clock, op_active_time, transform);
+        debug!("reverse-op({}): clock {}, active time = {}, transform {}", op_start, play_clock, op_active_time, transform);
         return transform;
     }
 }
@@ -73,8 +80,8 @@ impl Op for RepeatOp {
             offset = (cycle_count) * inner_loop_size;
         }
         let transform: SampleOffset = -offset as SampleOffset;
-        println!("repeat-op: delta {}, inner loop size {}: cycle count {}, offset {}, tf {}",
-                 delta, self.loop_size, cycle_count, offset, transform);
+        debug!("repeat-op: delta {}, inner loop size {}: cycle count {}, offset {}, tf {}",
+               delta, self.loop_size, cycle_count, offset, transform);
         return transform;
     }
 }
@@ -104,11 +111,11 @@ impl From<num::ParseIntError> for ParseError {
   }
 }
 
-pub fn new_from_string(line: &str) -> Result<(SamplePosition, SamplePosition, Box<dyn Op + Send>), ParseError> {
+pub fn new_from_string(line: &str) -> Result<(f64, f64, Box<dyn Op + Send>), ParseError> {
     let parts: Vec<&str> = line.split_ascii_whitespace().collect();
 
-    let start = parts[1].parse::<SamplePosition>()?;
-    let duration = parts[2].parse::<SamplePosition>()?;
+    let start = parts[1].parse::<f64>()?;
+    let duration = parts[2].parse::<f64>()?;
 
     match parts[0] {
         "reverse" => {
