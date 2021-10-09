@@ -184,7 +184,7 @@ fn run_live(midi_in_port: i32, audio_in_path: &str, loop_time_seconds: f32, bpm:
 
     let config = boucle::Config {
         sample_rate: SAMPLE_RATE as u64,
-        beats_to_samples: (bpm / 60.0) * (SAMPLE_RATE as f32)
+        beats_to_samples: (60.0 / bpm) * (SAMPLE_RATE as f32)
     };
 
     let boucle: boucle::Boucle = boucle::Boucle::new(&config);
@@ -254,7 +254,7 @@ fn calculate_loop_time(seconds: Option<f32>, beats: Option<f32>, bpm: Option<f32
         return Ok(value);
     } else if let Some(value) = beats {
         if let Some(multiplier) = bpm {
-            return Ok(value * multiplier);
+            return Ok(value * (60.0 / multiplier));
         } else {
             return Err("Loop size in beats requires a BPM".to_string());
         }
