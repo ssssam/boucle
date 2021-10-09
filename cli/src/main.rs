@@ -196,8 +196,13 @@ fn run_live(midi_in_port: i32, audio_in_path: &str, loop_time_seconds: f32, bpm:
     for i in 0..buffer_size_samples {
         // Sin wave
         //buffer[i] = f32::sin((i as f32) / 10.0) * 0.2;
-        buffers.input_a[i] = input_wav_buffer[i];
-        buffers.input_b[i] = input_wav_buffer[i];
+        if (i < input_wav_buffer.len()) {
+            buffers.input_a[i] = input_wav_buffer[i];
+            buffers.input_b[i] = input_wav_buffer[i];
+        } else {
+            buffers.input_a[i] = 0.0;
+            buffers.input_b[i] = 0.0;
+        }
     }
 
     let mut buf_rc: Arc<Mutex<LoopBuffers>> = Arc::new(Mutex::new(buffers));

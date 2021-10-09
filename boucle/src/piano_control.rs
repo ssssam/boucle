@@ -160,7 +160,7 @@ impl PianoControl {
             return;
         }
 
-        info!("recorded event {} {} at clock {:#?}", midi_event_status, midi_event_note, timestamp);
+        info!("recorded event {} {} at clock {:?}", midi_event_status, midi_event_note, timestamp);
         self.event_buffer.push(RecordedMidiEvent {
             timestamp,
             status: midi_event_status,
@@ -175,6 +175,7 @@ impl PianoControl {
                           period_duration: Duration) -> OpSequence {
         let mut op_sequence: OpSequence = OpSequence::new();
 
+        debug!("ops_for_period: {:?} for {:?} (buffer length: {}", period_start, period_duration, self.event_buffer.len());
         let mut i = 0;
         while i < self.event_buffer.len() {
             let event = &self.event_buffer[i];
