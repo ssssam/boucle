@@ -190,7 +190,7 @@ fn run_live(midi_in_port: i32, audio_in_path: &str, loop_time_seconds: f32, bpm:
     let boucle: boucle::Boucle = boucle::Boucle::new(&config);
     let mut boucle_rc: Arc<Mutex<Boucle>> = Arc::new(Mutex::new(boucle));
 
-    let buffer_size_samples: usize = (loop_time_seconds.ceil() as usize) * (SAMPLE_RATE as usize);
+    let buffer_size_samples: usize = (loop_time_seconds * SAMPLE_RATE as f32).floor() as usize;
     let mut buffers = create_buffers(buffer_size_samples);
 
     for i in 0..buffer_size_samples {
@@ -259,7 +259,9 @@ fn calculate_loop_time(seconds: Option<f32>, beats: Option<f32>, bpm: Option<f32
         return Ok(value);
     } else if let Some(value) = beats {
         if let Some(multiplier) = bpm {
-            return Ok(value * (60.0 / multiplier));
+            let loop_seconds: f32 = value * (60.0 / multiplier);
+            info!("Loop length: {} * (60.0 / {}) = {}", value, multiplier, loop_seconds);
+            return Ok(loop_seconds);
         } else {
             return Err("Loop size in beats requires a BPM".to_string());
         }
