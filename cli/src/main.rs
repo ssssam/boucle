@@ -184,7 +184,7 @@ fn run_live(midi_in_port: i32, audio_in_path: &str, loop_time_seconds: f32, bpm:
     };
 
     let boucle: boucle::Boucle = boucle::Boucle::new(&config);
-    let mut boucle_rc: Arc<Mutex<Boucle>> = Arc::new(Mutex::new(boucle));
+    let boucle_rc: Arc<Mutex<Boucle>> = Arc::new(Mutex::new(boucle));
 
     let buffer_size_samples: usize = (loop_time_seconds * SAMPLE_RATE as f32).floor() as usize;
     let mut buffers = create_buffers(buffer_size_samples);
@@ -192,7 +192,7 @@ fn run_live(midi_in_port: i32, audio_in_path: &str, loop_time_seconds: f32, bpm:
     for i in 0..buffer_size_samples {
         // Sin wave
         //buffer[i] = f32::sin((i as f32) / 10.0) * 0.2;
-        if (i < input_wav_buffer.len()) {
+        if i < input_wav_buffer.len() {
             buffers.input_a[i] = input_wav_buffer[i];
             buffers.input_b[i] = input_wav_buffer[i];
         } else {
@@ -201,7 +201,7 @@ fn run_live(midi_in_port: i32, audio_in_path: &str, loop_time_seconds: f32, bpm:
         }
     }
 
-    let mut buf_rc: Arc<Mutex<LoopBuffers>> = Arc::new(Mutex::new(buffers));
+    let buf_rc: Arc<Mutex<LoopBuffers>> = Arc::new(Mutex::new(buffers));
     let _audio_out_stream = match audio_config.sample_format() {
         cpal::SampleFormat::F32 => open_out_stream::<f32>(audio_out_device, audio_config.into(), boucle_rc.clone(), buf_rc.clone()),
         cpal::SampleFormat::I16 => open_out_stream::<i16>(audio_out_device, audio_config.into(), boucle_rc.clone(), buf_rc.clone()),
@@ -217,7 +217,6 @@ fn run_live(midi_in_port: i32, audio_in_path: &str, loop_time_seconds: f32, bpm:
     }
     while let Ok(_) = midi_in.poll() {
         if let Ok(Some(event)) = midi_in.read_n(1024) {
-            let buffers = buf_rc.lock().unwrap();
             let event2: &portmidi::MidiEvent = event.get(0).unwrap();
 
             let mut boucle = boucle_rc.lock().unwrap();
