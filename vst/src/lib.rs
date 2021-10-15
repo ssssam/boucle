@@ -3,6 +3,9 @@
 // Following: https://vaporsoft.net/creating-an-audio-plugin-with-rust-vst/
 // Docs: https://docs.rs/vst/0.2.1/vst/
 
+#[cfg(feature = "vst")]
+pub mod boucle_vst {
+
 #[macro_use]
 extern crate vst;
 
@@ -53,3 +56,5 @@ impl Plugin for BoucleVst {
 }
 
 plugin_main!(BoucleVst);
+
+}
