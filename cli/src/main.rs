@@ -120,8 +120,8 @@ fn get_audio_config(device: &cpal::Device) -> cpal::SupportedStreamConfig {
 
 fn open_out_stream<T: cpal::Sample>(device: cpal::Device,
                                     config: cpal::StreamConfig,
-                                    mut boucle_rc: Arc<Mutex<Boucle>>,
-                                    mut buffers_rc: Arc<Mutex<LoopBuffers>>) -> Box<cpal::Stream> {
+                                    boucle_rc: Arc<Mutex<Boucle>>,
+                                    buffers_rc: Arc<Mutex<LoopBuffers>>) -> Box<cpal::Stream> {
     return Box::new(device.build_output_stream(
         &config,
         move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
