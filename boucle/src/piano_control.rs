@@ -13,7 +13,7 @@ type MidiNote = u8;
 
 #[allow(non_upper_case_globals)]
 #[allow(unused)]
-mod Note {
+mod note {
     use super::MidiNote;
 
     pub const NOTE_C4: MidiNote = 48;
@@ -79,42 +79,42 @@ pub struct PianoControl {
 }
 
 // Keyboard map for OP-1.
-mod OP1 {
+mod op1 {
     use super::Operation;
-    use super::Note;
+    use super::note;
     use super::MidiNote;
 
     pub fn note_to_op(note: MidiNote) -> Operation {
         match note {
-            Note::NOTE_F4 => Operation::Jump { offset: -8.0 },
-            Note::NOTE_Gb4 => Operation::Jump { offset: -4.0 },
-            Note::NOTE_G4 => Operation::Jump { offset: -2.0 },
-            Note::NOTE_Ab4 => Operation::Jump { offset: -1.0 },
-            Note::NOTE_A4 => Operation::Jump { offset: -0.5 },
-            Note::NOTE_Bb4 => Operation::NoOp,
-            Note::NOTE_B4 => Operation::Jump { offset: -0.25 },
+            note::NOTE_F4 => Operation::Jump { offset: -8.0 },
+            note::NOTE_Gb4 => Operation::Jump { offset: -4.0 },
+            note::NOTE_G4 => Operation::Jump { offset: -2.0 },
+            note::NOTE_Ab4 => Operation::Jump { offset: -1.0 },
+            note::NOTE_A4 => Operation::Jump { offset: -0.5 },
+            note::NOTE_Bb4 => Operation::NoOp,
+            note::NOTE_B4 => Operation::Jump { offset: -0.25 },
 
-            Note::NOTE_C5 => Operation::Repeat { loop_size: 0.0625 },
-            Note::NOTE_Db5 => Operation::Repeat { loop_size: 0.125 },
-            Note::NOTE_D5 => Operation::Repeat { loop_size: 0.25 },
-            Note::NOTE_Eb5 => Operation::Repeat { loop_size: 0.5 },
+            note::NOTE_C5 => Operation::Repeat { loop_size: 0.0625 },
+            note::NOTE_Db5 => Operation::Repeat { loop_size: 0.125 },
+            note::NOTE_D5 => Operation::Repeat { loop_size: 0.25 },
+            note::NOTE_Eb5 => Operation::Repeat { loop_size: 0.5 },
 
-            Note::NOTE_E5 => Operation::Reverse,
-            Note::NOTE_F5 => Operation::NoOp,
+            note::NOTE_E5 => Operation::Reverse,
+            note::NOTE_F5 => Operation::NoOp,
 
-            Note::NOTE_Gb5 => Operation::Repeat { loop_size: 1.0 },
-            Note::NOTE_G5 => Operation::Repeat { loop_size: 2.0 },
-            Note::NOTE_Ab5 => Operation::Repeat { loop_size: 4.0 },
-            Note::NOTE_A5 => Operation::Repeat { loop_size: 8.0 },
+            note::NOTE_Gb5 => Operation::Repeat { loop_size: 1.0 },
+            note::NOTE_G5 => Operation::Repeat { loop_size: 2.0 },
+            note::NOTE_Ab5 => Operation::Repeat { loop_size: 4.0 },
+            note::NOTE_A5 => Operation::Repeat { loop_size: 8.0 },
 
-            Note::NOTE_Bb5 => Operation::NoOp,
+            note::NOTE_Bb5 => Operation::NoOp,
 
-            Note::NOTE_B5 => Operation::Jump { offset: 0.25 },
-            Note::NOTE_C6 => Operation::Jump { offset: 0.5 },
-            Note::NOTE_Db6 => Operation::Jump { offset: 1.0 },
-            Note::NOTE_D6 => Operation::Jump { offset: 2.0 },
-            Note::NOTE_Eb6 => Operation::Jump { offset: 4.0 },
-            Note::NOTE_E6 => Operation::Jump { offset: 8.0 },
+            note::NOTE_B5 => Operation::Jump { offset: 0.25 },
+            note::NOTE_C6 => Operation::Jump { offset: 0.5 },
+            note::NOTE_Db6 => Operation::Jump { offset: 1.0 },
+            note::NOTE_D6 => Operation::Jump { offset: 2.0 },
+            note::NOTE_Eb6 => Operation::Jump { offset: 4.0 },
+            note::NOTE_E6 => Operation::Jump { offset: 8.0 },
 
             _ => Operation::NoOp,
         }
@@ -122,14 +122,14 @@ mod OP1 {
 }
 
 // Keyboard map for Organelle.
-mod Organelle {
+mod organelle {
     use super::Operation;
-    use super::Note;
+    use super::note;
     use super::MidiNote;
 
     pub fn note_to_op(note: MidiNote) -> Operation {
         match note {
-            Note::NOTE_B5 => Operation::Reverse,
+            note::NOTE_B5 => Operation::Reverse,
 
             _ => Operation::NoOp,
         }
@@ -152,7 +152,7 @@ impl PianoControl {
                              timestamp: std::time::Instant,
                              midi_event_status: u8,
                              midi_event_note: u8) {
-        if midi_event_note < Note::NOTE_C4 || midi_event_note > Note::NOTE_E6 {
+        if midi_event_note < note::NOTE_C4 || midi_event_note > note::NOTE_E6 {
             return;
         }
 
@@ -183,7 +183,7 @@ impl PianoControl {
             // FIXME: need to process events from before buffer started, so we don't drop
             // events if we miss an audio buffer.
             if event.timestamp >= period_start && event.timestamp < (period_start + period_duration) {
-                let op: Operation = OP1::note_to_op(event.note);
+                let op: Operation = op1::note_to_op(event.note);
                 info!("Matched at {:#?}", event.timestamp);
                 match op {
                     Operation::Reverse => {
