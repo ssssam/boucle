@@ -21,22 +21,18 @@ use std::time::{Duration, Instant};
 enum InputBuffer { A, B }
 
 struct LoopBuffers {
-    loop_length: usize,
     input_a: boucle::Buffer,
     input_b: boucle::Buffer,
     current_input: InputBuffer,
-    output: boucle::Buffer,
     record_pos: usize,
 }
 
 fn create_buffers(buffer_size_samples: usize) -> LoopBuffers {
     let this = LoopBuffers {
-        loop_length: buffer_size_samples,
         input_a: vec!(0.0; buffer_size_samples),
         input_b: vec!(0.0; buffer_size_samples),
         current_input: InputBuffer::A,
         record_pos: 0,
-        output: vec!(0.0; buffer_size_samples),
     };
     return this;
 }
