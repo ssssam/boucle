@@ -3,5 +3,6 @@
 members = [
     "boucle",
     "cli",
+    "organelle",
     "vst",
 ]

@@ -1,0 +1,10 @@
+[package]
+name = "boucle_organelle"
+version = "1.0.0"
+edition = "2018"
+
+[dependencies]
+nannou_osc = { version = "0.17.0", optional = true }
+
+[features]
+organelle = ["nannou_osc"]
