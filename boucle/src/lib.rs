@@ -63,14 +63,14 @@ impl Boucle {
         let mut transformed_clock: SampleOffset = play_clock_samples.try_into().unwrap();
 
         for entry in op_sequence {
-            if op_sequence::op_active(entry, self.start_time, play_clock) {
+            if op_sequence::op_active(entry, play_clock) {
                 let op_start_samples: SamplePosition = duration_as_samples(entry.start - self.start_time, self.sample_rate);
                 let transform = entry.op.get_transform(play_clock_samples, op_start_samples, loop_length);
                 transformed_clock += transform;
             }
         }
 
-        let mut loop_position = 0;
+        let loop_position;
         if transformed_clock < 0 {
             debug!("transforming {}", transformed_clock.saturating_abs() as usize%loop_length);
             loop_position = (loop_length - ((transformed_clock.saturating_abs() as SamplePosition) % loop_length)) % loop_length;

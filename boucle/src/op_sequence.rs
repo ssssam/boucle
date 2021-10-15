@@ -24,7 +24,7 @@ impl fmt::Display for Entry {
 
 pub type OpSequence = Vec<Entry>;
 
-pub fn op_active(entry: &Entry, loop_start: Instant, clock: Instant) -> bool {
+pub fn op_active(entry: &Entry, clock: Instant) -> bool {
     let started = clock >= entry.start;
     let finished = match entry.duration {
         Some(duration) => clock >= (entry.start.checked_add(duration).unwrap()),

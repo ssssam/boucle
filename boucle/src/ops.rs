@@ -56,7 +56,7 @@ impl Op for ReverseOp {
     fn get_transform(self: &Self,
                      play_clock: SamplePosition,
                      op_start: SamplePosition,
-                     loop_length: SamplePosition) -> SampleOffset {
+                     _loop_length: SamplePosition) -> SampleOffset {
         let op_active_time = play_clock - op_start;
         let transform = -(op_active_time as SampleOffset) * 2;
         debug!("reverse-op({}): clock {}, active time = {}, transform {}", op_start, play_clock, op_active_time, transform);
@@ -68,7 +68,7 @@ impl Op for RepeatOp {
     fn get_transform(self: &Self,
                      play_clock: SamplePosition,
                      op_start: SamplePosition,
-                     loop_length: SamplePosition) -> SampleOffset {
+                     _loop_length: SamplePosition) -> SampleOffset {
         // Samples since operation started
         let delta = play_clock - op_start;
         // Times the inner loop has repeated

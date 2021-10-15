@@ -170,7 +170,7 @@ impl PianoControl {
 
     // Turn recorded MIDI events into Boucle operations, for a given time period.
     pub fn ops_for_period(self: &mut PianoControl,
-                          loop_start_time: Instant,
+                          _loop_start_time: Instant,
                           period_start: Instant,
                           period_duration: Duration) -> OpSequence {
         let mut op_sequence: OpSequence = OpSequence::new();
