@@ -197,22 +197,28 @@ fn open_midi_in<'a>(midi_context: &'a portmidi::PortMidi, midi_in_port: i32) -> 
     };
 }
 
-fn run_live(midi_in_port: i32, audio_in_path: &str, loop_time_seconds: f32, bpm: f32) -> Result<(), String> {
+fn run_live(midi_in_port: i32, audio_in_path: Option<&str>, input_device_name: Option<&str>,
+            output_device_name: Option<&str>, loop_time_seconds: f32, bpm: f32) -> Result<(), AppError> {
     let midi_context = match PortMidi::new() {
         Ok(value) => value,
-        Err(error) => return Err(format!("Cannot open PortMIDI: {}", error)),
+        Err(error) => return Err(AppError { message: format!("Cannot open PortMIDI: {}", error) }),
     };
     let midi_in = match open_midi_in(&midi_context, midi_in_port) {
         Ok(value) => value,
-        Err(error) => return Err(format!("Cannot open MIDI input: {}", error)),
+        Err(error) => return Err(AppError { message: format!("Cannot open MIDI input: {}", error) }),
     };
 
     let audio_host = cpal::default_host();
-    let audio_out_device = audio_host.default_output_device()
-        .expect("no output device available");
+
+    let audio_out_device = match output_device_name {
+        Some(name) => audio_host.devices()?.find(|d| name == d.name().unwrap_or("".to_string()))
+            .expect("no output device found matching name"),
+        None => audio_host.default_output_device()
+            .expect("no output device available"),
+    };
     let audio_config = get_audio_config(&audio_out_device);
 
-    let input_wav_buffer = input_wav_to_buffer(audio_in_path).expect("Failed to read input");
+    let input_wav_buffer = input_wav_to_buffer(audio_in_path.unwrap()).expect("Failed to read input");
 
     let config = boucle::Config {
         sample_rate: SAMPLE_RATE as u64,
@@ -313,9 +319,24 @@ fn main() {
     let app_m = App::new("Boucle looper")
         .version("1.0")
         .subcommand(App::new("live")
-            .arg(Arg::with_name("INPUT")
-                 .required(true)
-                 .index(1))
+            .arg(Arg::with_name("input-file")
+                 .long("input-file")
+                 .short("f")
+                 .help("Read loop buffer from FILE")
+                 .takes_value(true)
+                 .value_name("FILE"))
+            .arg(Arg::with_name("input-device")
+                 .long("input-device")
+                 .short("i")
+                 .help("Record audio from device")
+                 .takes_value(true)
+                 .value_name("NAME"))
+            .arg(Arg::with_name("output-device")
+                 .long("output-device")
+                 .short("o")
+                 .help("Play audio to device")
+                 .takes_value(true)
+                 .value_name("NAME"))
             .arg(Arg::with_name("midi-port")
                  .long("midi-port")
                  .short("p")
@@ -359,7 +380,9 @@ fn main() {
         ("live", Some(sub_m)) => {
             let midi_port: i32 = sub_m.value_of("midi-port").unwrap_or("0").
                                     parse::<i32>().unwrap();
-            let audio_in = sub_m.value_of("INPUT").unwrap();
+            let input_file = sub_m.value_of("input-file");
+            let input_device_name = sub_m.value_of("input-device");
+            let output_device_name = sub_m.value_of("output-device");
             let loop_time_seconds: Option<f32> = parse_f32_option(sub_m.value_of("loop-time-seconds"));
             let loop_time_beats: Option<f32> = parse_f32_option(sub_m.value_of("loop-time-beats"));
             let bpm: Option<f32> = parse_f32_option(sub_m.value_of("bpm"));
@@ -367,7 +390,7 @@ fn main() {
                 Ok(value) => value,
                 Err(string) => panic!("{}", string),
             };
-            run_live(midi_port, audio_in, loop_time, bpm.unwrap_or(60.0)).unwrap();
+            run_live(midi_port, input_file, input_device_name, output_device_name, loop_time, bpm.unwrap_or(60.0)).unwrap();
         },
         ("list-ports", Some(_)) => {
             run_list_ports().unwrap();
