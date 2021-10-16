@@ -1,5 +1,6 @@
 // Control Boucle using a piano keyboard.
 
+use crate::SamplePosition;
 use crate::ops::*;
 use crate::op_sequence;
 use crate::op_sequence::OpSequence;
@@ -7,7 +8,7 @@ use crate::op_sequence::OpSequence;
 use log::*;
 
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::{Instant};
 
 type MidiNote = u8;
 
@@ -63,7 +64,7 @@ pub enum Operation {
 }
 
 struct RecordedMidiEvent {
-    timestamp: Instant,
+    time: SamplePosition,
     status: u8,
     note: MidiNote,
 }
@@ -71,11 +72,15 @@ struct RecordedMidiEvent {
 pub struct PianoControl {
     event_buffer: Vec<RecordedMidiEvent>,
 
+    sample_rate: u64,
     beats_to_samples: f32,
 
     active_reverse: Option<op_sequence::Entry>,
     active_jumps: HashMap<MidiNote, op_sequence::Entry>,
     active_repeats: HashMap<MidiNote, op_sequence::Entry>,
+
+    event_sync_time: Instant,
+    event_sync_sample_position: SamplePosition,
 }
 
 // Keyboard map for OP-1.
@@ -137,14 +142,30 @@ mod organelle {
 }
 
 impl PianoControl {
-    pub fn new(beats_to_samples: f32) -> Self {
+    pub fn new(sample_rate: u64, beats_to_samples: f32) -> Self {
         PianoControl {
             event_buffer: Vec::new(),
+            sample_rate,
             beats_to_samples,
             active_reverse: None,
             active_jumps: HashMap::new(),
             active_repeats: HashMap::new(),
+            event_sync_time: Instant::now(),
+            event_sync_sample_position: 0,
         }
+    }
+
+    pub fn set_event_sync_point(self: &mut Self, time: Instant, sample_position: SamplePosition) {
+        info!("Update sync time: {:?}, sample position: {:?}", time, sample_position);
+        self.event_sync_time = time;
+        self.event_sync_sample_position = sample_position;
+    }
+
+    fn time_to_sample_position(self: &PianoControl,
+                               time: Instant) -> SamplePosition {
+        let duration = time - self.event_sync_time;
+        let duration_samples = duration.as_nanos() * (self.sample_rate as u128) / 1000000000;
+        return self.event_sync_sample_position + duration_samples as usize;
     }
 
     // Record MIDI events as they are received.
@@ -160,9 +181,10 @@ impl PianoControl {
             return;
         }
 
-        info!("recorded event {} {} at clock {:?}", midi_event_status, midi_event_note, timestamp);
+        let time = self.time_to_sample_position(timestamp);
+        info!("recorded event {} {} at pos {} clock {:?}", midi_event_status, midi_event_note, time, timestamp);
         self.event_buffer.push(RecordedMidiEvent {
-            timestamp,
+            time: time,
             status: midi_event_status,
             note: midi_event_note,
         });
@@ -170,9 +192,8 @@ impl PianoControl {
 
     // Turn recorded MIDI events into Boucle operations, for a given time period.
     pub fn ops_for_period(self: &mut PianoControl,
-                          _loop_start_time: Instant,
-                          period_start: Instant,
-                          period_duration: Duration) -> OpSequence {
+                          period_start: SamplePosition,
+                          period_duration: SamplePosition) -> OpSequence {
         let mut op_sequence: OpSequence = OpSequence::new();
 
         debug!("ops_for_period: {:?} for {:?} (buffer length: {}", period_start, period_duration, self.event_buffer.len());
@@ -180,24 +201,25 @@ impl PianoControl {
         while i < self.event_buffer.len() {
             let event = &self.event_buffer[i];
 
-            // FIXME: need to process events from before buffer started, so we don't drop
-            // events if we miss an audio buffer.
-            if event.timestamp >= period_start && event.timestamp < (period_start + period_duration) {
+            let event_sample_position = event.time;
+
+            // FIXME: need to process events from before buffer started, they are still on!!
+            if event_sample_position >= period_start && event_sample_position < (period_start + period_duration) {
                 let op: Operation = op1::note_to_op(event.note);
-                info!("Matched at {:#?}", event.timestamp);
+                info!("Matched at {:#?}", event.time);
                 match op {
                     Operation::Reverse => {
                         if is_note_on(event.status) && self.active_reverse.is_none() {
-                            info!("{:#?}: reverse on", event.timestamp);
+                            info!("{:#?}: reverse on", event_sample_position);
                             self.active_reverse = Some(op_sequence::Entry {
-                                start: event.timestamp,
+                                start: event_sample_position,
                                 duration: None,
                                 op: Box::new(ReverseOp {})
                             });
                         } else if is_note_off(event.status) && matches!(self.active_reverse, Some(_)) {
-                            info!("{:#?}: reverse off", event.timestamp);
+                            info!("{:#?}: reverse off", event.time);
                             let mut op_entry: op_sequence::Entry = self.active_reverse.take().unwrap();
-                            op_entry.duration = Some(event.timestamp.duration_since(op_entry.start));
+                            op_entry.duration = Some(event_sample_position - op_entry.start);
                             op_sequence.push(op_entry);
                         } else {
                             warn!("Warning: mismatched note on/off for {:?}", event.note);
@@ -206,18 +228,18 @@ impl PianoControl {
 
                     Operation::Repeat { loop_size } => {
                         if is_note_on(event.status) && !self.active_repeats.contains_key(&event.note) {
-                            info!("{:#?}: repeat({}) on", event.timestamp, loop_size);
+                            info!("{:#?}: repeat({}) on", event_sample_position, loop_size);
                             self.active_repeats.insert(event.note, op_sequence::Entry {
-                                start: event.timestamp,
+                                start: event_sample_position,
                                 duration: None,
                                 op: Box::new(RepeatOp {
                                     loop_size: (loop_size * self.beats_to_samples).floor() as usize
                                 })
                             });
                         } else if is_note_off(event.status) && self.active_repeats.contains_key(&event.note) {
-                            info!("{:#?}: repeat({}) on", event.timestamp, loop_size);
+                            info!("{:#?}: repeat({}) on", event_sample_position, loop_size);
                             let mut op_entry: op_sequence::Entry = self.active_repeats.remove(&event.note).unwrap();
-                            op_entry.duration = Some(event.timestamp.duration_since(op_entry.start));
+                            op_entry.duration = Some(event_sample_position - op_entry.start);
                             op_sequence.push(op_entry);
                         } else {
                             warn!("Warning: mismatched note on/off for {:?}", event.note);
@@ -226,18 +248,18 @@ impl PianoControl {
 
                     Operation::Jump { offset } => {
                         if is_note_on(event.status) && !self.active_jumps.contains_key(&event.note) {
-                            info!("{:#?}: jumps({}) on", event.timestamp, offset);
+                            info!("{:#?}: jumps({}) on", event_sample_position, offset);
                             self.active_jumps.insert(event.note, op_sequence::Entry {
-                                start: event.timestamp,
+                                start: event_sample_position,
                                 duration: None,
                                 op: Box::new(JumpOp {
                                     offset: (offset * self.beats_to_samples).floor() as isize
                                 })
                             });
                         } else if is_note_off(event.status) && self.active_jumps.contains_key(&event.note) {
-                            info!("{:#?}: repeat({}) on", event.timestamp, offset);
+                            info!("{:#?}: repeat({}) on", event_sample_position, offset);
                             let mut op_entry: op_sequence::Entry = self.active_jumps.remove(&event.note).unwrap();
-                            op_entry.duration = Some(event.timestamp.duration_since(op_entry.start));
+                            op_entry.duration = Some(event_sample_position - op_entry.start);
                             op_sequence.push(op_entry);
                         } else {
                             warn!("Warning: mismatched note on/off for {:?}", event.note);

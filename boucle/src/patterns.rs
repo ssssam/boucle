@@ -6,12 +6,10 @@
 use crate::ops;
 use crate::op_sequence;
 
-use std::time::{Duration, Instant};
-
 type Beats = f32;
 
 pub trait Pattern {
-    fn op_for_beat(self: &mut Self, loop_start: Instant, beat: Beats, beats_to_secs: f32) -> Option<op_sequence::Entry>;
+    fn op_for_beat(self: &mut Self, beat: Beats, beats_to_secs: f32) -> Option<op_sequence::Entry>;
 }
 
 pub struct CheckersReverse {
@@ -30,11 +28,11 @@ impl CheckersReverse {
 }
 
 impl Pattern for CheckersReverse {
-    fn op_for_beat(self: &mut Self, loop_start: Instant, beat: Beats, beats_to_secs: f32) -> Option<op_sequence::Entry> {
+    fn op_for_beat(self: &mut Self, beat: Beats, beats_to_samples: f32) -> Option<op_sequence::Entry> {
         if (beat % self.period) == 0.0 {
             Some(op_sequence::Entry {
-                start: loop_start + Duration::from_secs((beat * beats_to_secs) as u64),
-                duration: Some(Duration::from_secs((self.duration * beats_to_secs) as u64)),
+                start: (beat * beats_to_samples) as usize,
+                duration: Some((self.duration * beats_to_samples) as usize),
                 op: Box::new(ops::ReverseOp {}),
             })
         } else {

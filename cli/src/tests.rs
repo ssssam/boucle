@@ -31,7 +31,7 @@ mod tests {
         let ops_path = get_test_data_path("ops.test");
         let input_path = get_test_data_path("chirp.i16.wav");
         let output_path = get_test_output_path("out.i16.wav");
-        run_batch(&input_path, &output_path, &ops_path);
+        run_batch(&input_path, &output_path, 2.0, &ops_path);
 
         assert!(Path::new(&output_path).exists(),
             "Output {} does not exist", output_path);
@@ -42,7 +42,7 @@ mod tests {
         let ops_path = get_test_data_path("ops.test");
         let input_path = get_test_data_path("chirp.f32.wav");
         let output_path = get_test_output_path("out.f32.wav");
-        run_batch(&input_path, &output_path, &ops_path);
+        run_batch(&input_path, &output_path, 2.0, &ops_path);
 
         assert!(Path::new(&output_path).exists());
     }
