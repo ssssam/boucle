@@ -12,6 +12,7 @@ use hound;
 use log::*;
 use portmidi::{PortMidi};
 
+use std::fmt;
 use std::fs::File;
 use std::io;
 use std::io::Read;use std::thread::sleep;
@@ -25,6 +26,41 @@ struct LoopBuffers {
     input_b: boucle::Buffer,
     current_input: InputBuffer,
     record_pos: usize,
+}
+
+#[derive(Debug)]
+struct AppError {
+    message: String,
+}
+
+impl fmt::Display for AppError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl From<portmidi::Error> for AppError {
+    fn from(error: portmidi::Error) -> Self {
+        AppError {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<cpal::DevicesError> for AppError {
+    fn from(error: cpal::DevicesError) -> Self {
+        AppError {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<cpal::DeviceNameError> for AppError {
+    fn from(error: cpal::DeviceNameError) -> Self {
+        AppError {
+            message: error.to_string(),
+        }
+    }
 }
 
 fn create_buffers(buffer_size_samples: usize) -> LoopBuffers {
@@ -230,12 +266,18 @@ fn run_live(midi_in_port: i32, audio_in_path: &str, loop_time_seconds: f32, bpm:
     return Ok(())
 }
 
-fn run_list_ports() -> Result<(), portmidi::Error> {
-    let context = PortMidi::new()?;
+fn run_list_ports() -> Result<(), AppError> {
+    let host = cpal::default_host();
+    println!("Available audio devices for host {}:", host.id().name());
+    for dev in host.devices()? {
+        println!(" • {}", dev.name()?);
+    }
 
+    println!();
     println!("Available MIDI input ports:");
-    for dev in context.devices()? {
-        println!("{}\n", dev);
+    let midi_context = PortMidi::new()?;
+    for dev in midi_context.devices()? {
+        println!(" • {}", dev);
     }
 
     return Ok(())
