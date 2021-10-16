@@ -1,4 +1,3 @@
-#[cfg(feature = "organelle")]
 pub mod boucle_organelle {
     use nannou_osc as osc;
 
@@ -22,7 +21,6 @@ pub mod boucle_organelle {
     }
 }
 
-#[cfg(feature = "organelle")]
 fn main() {
     boucle_organelle::main();
 }

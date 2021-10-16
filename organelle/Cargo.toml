@@ -2,9 +2,15 @@
 name = "boucle_organelle"
 version = "1.0.0"
 edition = "2018"
+include = ["data/*"]
 
 [dependencies]
 nannou_osc = { version = "0.17.0", optional = true }
 
 [features]
+default = ["organelle"]
 organelle = ["nannou_osc"]
+
+[[bin]]
+name = "boucle_organelle"
+required-features = ["organelle"]
