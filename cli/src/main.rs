@@ -63,6 +63,14 @@ impl From<cpal::DeviceNameError> for AppError {
     }
 }
 
+impl From<hound::Error> for AppError {
+    fn from(error: hound::Error) -> Self {
+        AppError {
+            message: error.to_string(),
+        }
+    }
+}
+
 fn create_buffers(buffer_size_samples: usize) -> LoopBuffers {
     let this = LoopBuffers {
         input_a: vec!(0.0; buffer_size_samples),
@@ -89,7 +97,7 @@ fn read_ops(start_time: Instant, file_name: &str) -> Result<OpSequence, io::Erro
     return Ok(op_sequence);
 }
 
-fn input_wav_to_buffer(audio_in_path: &str) -> Result<boucle::Buffer, hound::Error> {
+fn input_wav_to_buffer(audio_in_path: &str, buffers: &mut LoopBuffers) -> Result<(), AppError> {
     let reader = hound::WavReader::open(audio_in_path)?;
     let spec = reader.spec();
 
@@ -98,7 +106,7 @@ fn input_wav_to_buffer(audio_in_path: &str) -> Result<boucle::Buffer, hound::Err
     }
 
     info!("Read input {}: {:?}", audio_in_path, spec);
-    let buffer: boucle::Buffer = match spec.sample_format {
+    let wav_buffer: boucle::Buffer = match spec.sample_format {
         hound::SampleFormat::Int => {
             let samples = reader
                 .into_samples()
@@ -112,10 +120,23 @@ fn input_wav_to_buffer(audio_in_path: &str) -> Result<boucle::Buffer, hound::Err
             samples.map(|s: f32| s.to_sample::<boucle::Sample>()).collect()
         },
     };
-    return Ok(buffer);
+
+    for i in 0..buffers.input_a.len() {
+        // Sin wave
+        //buffer[i] = f32::sin((i as f32) / 10.0) * 0.2;
+        if i < wav_buffer.len() {
+            buffers.input_a[i] = wav_buffer[i];
+            buffers.input_b[i] = wav_buffer[i];
+        } else {
+            buffers.input_a[i] = 0.0;
+            buffers.input_b[i] = 0.0;
+        }
+    };
+
+    return Ok(());
 }
 
-fn run_batch(audio_in_path: &str, audio_out: &str, operations_file: &str) {
+fn run_batch(audio_in_path: &str, audio_out: &str, loop_time_seconds: f32, operations_file: &str) {
     let epoch = Instant::now();
 
     let op_sequence = read_ops(epoch, &operations_file).expect("Failed to read ops");
@@ -123,7 +144,10 @@ fn run_batch(audio_in_path: &str, audio_out: &str, operations_file: &str) {
         debug!("{}", op);
     }
 
-    let buffer = input_wav_to_buffer(audio_in_path).expect("Failed to read input");
+    let buffer_size_samples: usize = (loop_time_seconds * SAMPLE_RATE as f32).floor() as usize;
+    let mut buffers = create_buffers(buffer_size_samples);
+
+    input_wav_to_buffer(audio_in_path, &mut buffers).expect("Failed to read input");
 
     let out_spec = hound::WavSpec {
         channels: 1,
@@ -135,7 +159,7 @@ fn run_batch(audio_in_path: &str, audio_out: &str, operations_file: &str) {
 
     let mut boucle: boucle::Boucle = boucle::Boucle::new(&boucle::Config::default());
     boucle.set_start_time(epoch);
-    boucle.process_buffer(&buffer, epoch, buffer.len(), &op_sequence, &mut |s| {
+    boucle.process_buffer(&buffers.input_a, epoch, buffers.input_a.len(), &op_sequence, &mut |s| {
         let s_i16 = s.to_sample::<i16>();
         writer.write_sample(s_i16).unwrap();
     });
@@ -218,8 +242,6 @@ fn run_live(midi_in_port: i32, audio_in_path: Option<&str>, input_device_name: O
     };
     let audio_config = get_audio_config(&audio_out_device);
 
-    let input_wav_buffer = input_wav_to_buffer(audio_in_path.unwrap()).expect("Failed to read input");
-
     let config = boucle::Config {
         sample_rate: SAMPLE_RATE as u64,
         beats_to_samples: (60.0 / bpm) * (SAMPLE_RATE as f32)
@@ -231,16 +253,9 @@ fn run_live(midi_in_port: i32, audio_in_path: Option<&str>, input_device_name: O
     let buffer_size_samples: usize = (loop_time_seconds * SAMPLE_RATE as f32).floor() as usize;
     let mut buffers = create_buffers(buffer_size_samples);
 
-    for i in 0..buffer_size_samples {
-        // Sin wave
-        //buffer[i] = f32::sin((i as f32) / 10.0) * 0.2;
-        if i < input_wav_buffer.len() {
-            buffers.input_a[i] = input_wav_buffer[i];
-            buffers.input_b[i] = input_wav_buffer[i];
-        } else {
-            buffers.input_a[i] = 0.0;
-            buffers.input_b[i] = 0.0;
-        }
+    if let Some(filename) = audio_in_path {
+        input_wav_to_buffer(filename, &mut buffers)
+            .expect("Failed to read input");
     }
 
     let buf_rc: Arc<Mutex<LoopBuffers>> = Arc::new(Mutex::new(buffers));
@@ -366,23 +381,29 @@ fn main() {
                  .index(1))
             .arg(Arg::with_name("OUTPUT")
                  .required(true)
-                 .index(2)))
+                 .index(2))
+            .arg(Arg::with_name("bpm")
+                 .long("bpm")
+                 .help("Beats per minute")
+                 .takes_value(true)
+                 .value_name("BPM"))
+            .arg(Arg::with_name("loop-time-seconds")
+                 .long("loop-time-seconds")
+                 .short("s")
+                 .help("Loop length, in seconds")
+                 .takes_value(true)
+                 .value_name("SECONDS"))
+            .arg(Arg::with_name("loop-time-beats")
+                 .long("loop-time-beats")
+                 .short("b")
+                 .help("Loop length, in beats (requires `--bpm`)")
+                 .takes_value(true)
+                 .value_name("BEATS")))
         .subcommand(App::new("list-ports"))
         .get_matches();
 
     match app_m.subcommand() {
         ("batch", Some(sub_m)) => {
-            let audio_in = sub_m.value_of("INPUT").unwrap();
-            let audio_out = sub_m.value_of("OUTPUT").unwrap();
-            let operations_file = "ops.test";
-            run_batch(audio_in, audio_out, operations_file);
-        },
-        ("live", Some(sub_m)) => {
-            let midi_port: i32 = sub_m.value_of("midi-port").unwrap_or("0").
-                                    parse::<i32>().unwrap();
-            let input_file = sub_m.value_of("input-file");
-            let input_device_name = sub_m.value_of("input-device");
-            let output_device_name = sub_m.value_of("output-device");
             let loop_time_seconds: Option<f32> = parse_f32_option(sub_m.value_of("loop-time-seconds"));
             let loop_time_beats: Option<f32> = parse_f32_option(sub_m.value_of("loop-time-beats"));
             let bpm: Option<f32> = parse_f32_option(sub_m.value_of("bpm"));
@@ -390,6 +411,26 @@ fn main() {
                 Ok(value) => value,
                 Err(string) => panic!("{}", string),
             };
+
+            let audio_in = sub_m.value_of("INPUT").unwrap();
+            let audio_out = sub_m.value_of("OUTPUT").unwrap();
+            let operations_file = "ops.test";
+            run_batch(audio_in, audio_out, loop_time, operations_file);
+        },
+        ("live", Some(sub_m)) => {
+            let loop_time_seconds: Option<f32> = parse_f32_option(sub_m.value_of("loop-time-seconds"));
+            let loop_time_beats: Option<f32> = parse_f32_option(sub_m.value_of("loop-time-beats"));
+            let bpm: Option<f32> = parse_f32_option(sub_m.value_of("bpm"));
+            let loop_time = match calculate_loop_time(loop_time_seconds, loop_time_beats, bpm) {
+                Ok(value) => value,
+                Err(string) => panic!("{}", string),
+            };
+
+            let midi_port: i32 = sub_m.value_of("midi-port").unwrap_or("0").
+                                    parse::<i32>().unwrap();
+            let input_file = sub_m.value_of("input-file");
+            let input_device_name = sub_m.value_of("input-device");
+            let output_device_name = sub_m.value_of("output-device");
             run_live(midi_port, input_file, input_device_name, output_device_name, loop_time, bpm.unwrap_or(60.0)).unwrap();
         },
         ("list-ports", Some(_)) => {
