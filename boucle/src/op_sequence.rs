@@ -1,14 +1,13 @@
+use crate::SamplePosition;
 use crate::ops::Op;
 
 use std::fmt;
-use std::time::Duration;
-use std::time::Instant;
 
 #[derive(Clone)]
 #[derive(Debug)]
 pub struct Entry {
-    pub start: Instant,
-    pub duration: Option<Duration>,
+    pub start: SamplePosition,
+    pub duration: Option<SamplePosition>,
     pub op: Box<dyn Op + Send>,
 }
 
@@ -24,7 +23,7 @@ impl fmt::Display for Entry {
 
 pub type OpSequence = Vec<Entry>;
 
-pub fn op_active(entry: &Entry, clock: Instant) -> bool {
+pub fn op_active(entry: &Entry, clock: SamplePosition) -> bool {
     let started = clock >= entry.start;
     let finished = match entry.duration {
         Some(duration) => clock >= (entry.start.checked_add(duration).unwrap()),

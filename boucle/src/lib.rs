@@ -5,7 +5,6 @@ pub mod piano_control;
 mod tests;
 
 use std::convert::TryInto;
-use std::time::{Duration, Instant};
 
 use log::*;
 
@@ -37,35 +36,23 @@ impl Default for Config {
 pub struct Boucle {
     pub controller: PianoControl,
     pub sample_rate: u64,
-    pub start_time: Instant,
-}
-
-fn duration_as_samples(duration: Duration, sample_rate: u64) -> SamplePosition {
-    return ((duration.as_nanos() * (sample_rate as u128)) / 1000000000) as usize;
 }
 
 impl Boucle {
     pub fn new(config: &Config) -> Boucle {
         return Boucle {
-            controller: PianoControl::new(config.beats_to_samples),
+            controller: PianoControl::new(config.sample_rate, config.beats_to_samples),
             sample_rate: config.sample_rate,
-            start_time: Instant::now(),
         }
     }
 
-    pub fn set_start_time(self: &mut Self, start_time: Instant) {
-        self.start_time = start_time;
-    }
-
-    pub fn next_sample(self: &Boucle, loop_buffer: &[Sample], op_sequence: &OpSequence, play_clock: Instant) -> Sample {
+    pub fn next_sample(self: &Boucle, loop_buffer: &[Sample], op_sequence: &OpSequence, play_clock: SamplePosition) -> Sample {
         let loop_length = loop_buffer.len();
-        let play_clock_samples: SamplePosition = duration_as_samples(play_clock - self.start_time, self.sample_rate);
-        let mut transformed_clock: SampleOffset = play_clock_samples.try_into().unwrap();
+        let mut transformed_clock: SampleOffset = play_clock.try_into().unwrap();
 
         for entry in op_sequence {
             if op_sequence::op_active(entry, play_clock) {
-                let op_start_samples: SamplePosition = duration_as_samples(entry.start - self.start_time, self.sample_rate);
-                let transform = entry.op.get_transform(play_clock_samples, op_start_samples, loop_length);
+                let transform = entry.op.get_transform(play_clock, entry.start, loop_length);
                 transformed_clock += transform;
             }
         }
@@ -78,13 +65,12 @@ impl Boucle {
             loop_position = (transformed_clock as SamplePosition) % loop_length;
         }
 
-        debug!("start time {:?}, clock time {:?}, transformed from {:?} to {:?}, loop pos {:?}", self.start_time, play_clock, play_clock_samples, transformed_clock, loop_position);
         return loop_buffer[loop_position];
     }
 
     pub fn process_buffer(self: &Boucle,
                           loop_buffer: &[Sample],
-                          play_clock: Instant,
+                          play_clock: SamplePosition,
                           out_buffer_length: SamplePosition,
                           ops: &OpSequence,
                           write_sample: &mut dyn FnMut(Sample)) {
@@ -92,9 +78,7 @@ impl Boucle {
         info!("Buffer is {:#?} samples long, playing at {:?} for {:#?}", loop_length, play_clock, out_buffer_length);
 
         for sample in 0..out_buffer_length {
-            let sample_time: Duration = Duration::from_nanos((sample as u64) * 1000000000 / self.sample_rate);
-            //debug!("sample {}: time {:?}", sample, sample_time);
-            let s = self.next_sample(&loop_buffer, ops, play_clock + sample_time);
+            let s = self.next_sample(&loop_buffer, ops, play_clock + sample);
             write_sample(s);
         }
     }

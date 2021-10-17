@@ -7,7 +7,7 @@ mod tests {
     use crate::op_sequence;
     use crate::OpSequence;
 
-    const TEST_CONFIG: Config = Config { sample_rate: 44100 };
+    const TEST_CONFIG: Config = Config { sample_rate: 44100, beats_to_samples: 100.0 };
 
     fn make_buffer(data: &[i16]) -> Vec<Sample> {
         data.iter().map(|s| Sample::from(*s)).collect()
@@ -15,7 +15,7 @@ mod tests {
 
     #[test]
     fn basic_reverse() {
-        let boucle: Boucle = Boucle::new(TEST_CONFIG);
+        let boucle: Boucle = Boucle::new(&TEST_CONFIG);
         let input = make_buffer(&[1,2,3,4, 5,6,7,8]);
 
         let ops: OpSequence = vec!(
@@ -30,7 +30,7 @@ mod tests {
 
     #[test]
     fn basic_jump() {
-        let boucle: Boucle = Boucle::new(TEST_CONFIG);
+        let boucle: Boucle = Boucle::new(&TEST_CONFIG);
         let input = make_buffer(&[1,2,3,4, 5,6,7,8, 9,10,11,12, 13,14,15,16]);
 
         let ops: OpSequence = vec!(
@@ -46,7 +46,7 @@ mod tests {
 
     #[test]
     fn basic_repeat() {
-        let boucle: Boucle = Boucle::new(TEST_CONFIG);
+        let boucle: Boucle = Boucle::new(&TEST_CONFIG);
         let input = make_buffer(&[1,2,3,4, 5,6,7,8, 9,10,11,12, 13,14,15,16, 17,18,19,20, 21,22,23,24]);
 
         let ops: OpSequence = vec!(
