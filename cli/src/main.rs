@@ -1,181 +1,35 @@
+mod app_config;
+mod app_error;
+mod buffers;
+mod cmd_batch;
+mod cmd_list_ports;
 mod tests;
+
+use std::thread::sleep;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+use clap::{Arg, App};
+use cpal::traits::{DeviceTrait, HostTrait};
+use dasp::{Sample};
+use log::*;
+use portmidi::{PortMidi};
 
 use boucle;
 use boucle::Boucle;
 use boucle::op_sequence;
 use boucle::OpSequence;
 
-use clap::{Arg, App};
-use cpal::traits::{DeviceTrait, HostTrait};
-use dasp::{Sample};
-use hound;
-use log::*;
-use portmidi::{PortMidi};
+use crate::app_config::AppConfig;
+use crate::buffers::{InputBuffer, LoopBuffers, create_buffers, input_wav_to_buffer};
+use crate::app_error::AppError;
 
-use std::fmt;
-use std::fs::File;
-use std::io;
-use std::io::Read;use std::thread::sleep;
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
-
-#[derive(PartialEq)]
-enum InputBuffer { A, B }
-
-struct LoopBuffers {
-    input_a: boucle::Buffer,
-    input_b: boucle::Buffer,
-    current_input: InputBuffer,
-    current_output: InputBuffer,
-    record_pos: boucle::SamplePosition,
-    play_clock: boucle::SamplePosition,
-}
-
-#[derive(Debug)]
-struct AppError {
-    message: String,
-}
-
-impl fmt::Display for AppError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.message)
-    }
-}
-
-impl From<portmidi::Error> for AppError {
-    fn from(error: portmidi::Error) -> Self {
-        AppError {
-            message: error.to_string(),
-        }
-    }
-}
-
-impl From<cpal::DevicesError> for AppError {
-    fn from(error: cpal::DevicesError) -> Self {
-        AppError {
-            message: error.to_string(),
-        }
-    }
-}
-
-impl From<cpal::DeviceNameError> for AppError {
-    fn from(error: cpal::DeviceNameError) -> Self {
-        AppError {
-            message: error.to_string(),
-        }
-    }
-}
-
-impl From<hound::Error> for AppError {
-    fn from(error: hound::Error) -> Self {
-        AppError {
-            message: error.to_string(),
-        }
-    }
-}
-
-fn create_buffers(buffer_size_samples: usize) -> LoopBuffers {
-    let this = LoopBuffers {
-        input_a: vec!(0.0; buffer_size_samples),
-        input_b: vec!(0.0; buffer_size_samples),
-        current_input: InputBuffer::B,
-        current_output: InputBuffer::A,
-        record_pos: 0,
-        play_clock: 0,
-    };
-    return this;
-}
-
-fn read_ops(sample_rate: u32, file_name: &str) -> Result<OpSequence, io::Error> {
-    let mut text = String::new();
-    let mut op_sequence = OpSequence::new();
-    let mut file = File::open(file_name)?;
-    file.read_to_string(&mut text)?;
-    for line in text.lines() {
-        let (start_seconds, duration_seconds, op) = boucle::ops::new_from_string(line).expect("Failed to parse line");
-        op_sequence.push(op_sequence::Entry {
-            start: (start_seconds * sample_rate as f64) as usize,
-            duration: Some((duration_seconds * sample_rate as f64) as usize),
-            op
-        });
-    }
-    return Ok(op_sequence);
-}
-
-fn input_wav_to_buffer(audio_in_path: &str, buffers: &mut LoopBuffers) -> Result<(), AppError> {
-    let reader = hound::WavReader::open(audio_in_path)?;
-    let spec = reader.spec();
-
-    if spec.channels != 1 {
-        panic!("Input WAV file must be mono (got {} channels", spec.channels);
-    }
-
-    info!("Read input {}: {:?}", audio_in_path, spec);
-    let wav_buffer: boucle::Buffer = match spec.sample_format {
-        hound::SampleFormat::Int => {
-            let samples = reader
-                .into_samples()
-                .filter_map(Result::ok);
-            samples.map(|s: i32| s.to_sample::<boucle::Sample>()).collect()
-        },
-        hound::SampleFormat::Float => {
-            let samples = reader
-                .into_samples()
-                .filter_map(Result::ok);
-            samples.map(|s: f32| s.to_sample::<boucle::Sample>()).collect()
-        },
-    };
-
-    for i in 0..buffers.input_a.len() {
-        // Sin wave
-        //buffer[i] = f32::sin((i as f32) / 10.0) * 0.2;
-        if i < wav_buffer.len() {
-            buffers.input_a[i] = wav_buffer[i];
-            buffers.input_b[i] = wav_buffer[i];
-        } else {
-            buffers.input_a[i] = 0.0;
-            buffers.input_b[i] = 0.0;
-        }
-    };
-
-    return Ok(());
-}
-
-fn run_batch(audio_in_path: &str, audio_out: &str, loop_time_seconds: f32, operations_file: &str) {
-    let op_sequence = read_ops(SAMPLE_RATE, &operations_file).expect("Failed to read ops");
-    for op in &op_sequence {
-        debug!("{}", op);
-    }
-
-    let buffer_size_samples: usize = (loop_time_seconds * SAMPLE_RATE as f32).floor() as usize;
-    let mut buffers = create_buffers(buffer_size_samples);
-
-    input_wav_to_buffer(audio_in_path, &mut buffers).expect("Failed to read input");
-
-    let out_spec = hound::WavSpec {
-        channels: 1,
-        sample_rate: 44100,
-        bits_per_sample: 16,
-        sample_format: hound::SampleFormat::Int
-    };
-    let mut writer = hound::WavWriter::create(audio_out, out_spec).unwrap();
-
-    let boucle: boucle::Boucle = boucle::Boucle::new(&boucle::Config::default());
-    boucle.process_buffer(&buffers.input_a, 0, buffers.input_a.len(), &op_sequence, &mut |s| {
-        let s_i16 = s.to_sample::<i16>();
-        writer.write_sample(s_i16).unwrap();
-    });
-    writer.finalize().unwrap();
-}
-
-const SAMPLE_RATE: u32 = 44100;
-
-fn get_audio_config(device: &cpal::Device) -> cpal::SupportedStreamConfig {
+fn get_audio_config(app_config: &AppConfig, device: &cpal::Device) -> cpal::SupportedStreamConfig {
     let mut supported_configs_range = device.supported_output_configs()
         .expect("error while querying configs");
     let supported_config = supported_configs_range.next()
         .expect("no supported config")
-        .with_sample_rate(cpal::SampleRate(SAMPLE_RATE));
+        .with_sample_rate(cpal::SampleRate(app_config.sample_rate));
     info!("audio config: {:?}", supported_config);
     return supported_config;
 }
@@ -295,7 +149,7 @@ fn open_midi_in<'a>(midi_context: &'a portmidi::PortMidi, midi_in_port: i32) -> 
     };
 }
 
-fn run_live(midi_in_port: i32, audio_in_path: Option<&str>, input_device_name: Option<&str>,
+fn run_live(app_config: &AppConfig, midi_in_port: i32, audio_in_path: Option<&str>, input_device_name: Option<&str>,
             output_device_name: Option<&str>, loop_time_seconds: f32, bpm: f32) -> Result<(), AppError> {
     let midi_context = match PortMidi::new() {
         Ok(value) => value,
@@ -309,14 +163,14 @@ fn run_live(midi_in_port: i32, audio_in_path: Option<&str>, input_device_name: O
     let audio_host = cpal::default_host();
 
     let config = boucle::Config {
-        sample_rate: SAMPLE_RATE as u64,
-        beats_to_samples: (60.0 / bpm) * (SAMPLE_RATE as f32)
+        sample_rate: app_config.sample_rate as u64,
+        beats_to_samples: (60.0 / bpm) * (app_config.sample_rate as f32)
     };
 
     let boucle: boucle::Boucle = boucle::Boucle::new(&config);
     let boucle_rc: Arc<Mutex<Boucle>> = Arc::new(Mutex::new(boucle));
 
-    let buffer_size_samples: usize = (loop_time_seconds * SAMPLE_RATE as f32).floor() as usize;
+    let buffer_size_samples: usize = (loop_time_seconds * app_config.sample_rate as f32).floor() as usize;
     let buffers = create_buffers(buffer_size_samples);
     let buf_rc: Arc<Mutex<LoopBuffers>> = Arc::new(Mutex::new(buffers));
 
@@ -330,7 +184,7 @@ fn run_live(midi_in_port: i32, audio_in_path: Option<&str>, input_device_name: O
             .expect("no output device available"),
     };
 
-    let supported_audio_config = get_audio_config(&audio_out_device);
+    let supported_audio_config = get_audio_config(&app_config, &audio_out_device);
     let sample_format = supported_audio_config.sample_format();
     let input_audio_config: cpal::StreamConfig = supported_audio_config.clone().into();
     let output_audio_config: cpal::StreamConfig = supported_audio_config.into();
@@ -377,29 +231,6 @@ fn run_live(midi_in_port: i32, audio_in_path: Option<&str>, input_device_name: O
 
         // there is no blocking receive method in PortMidi
         sleep(Duration::from_millis(10));
-    }
-
-    return Ok(())
-}
-
-fn run_list_ports() -> Result<(), AppError> {
-    let host = cpal::default_host();
-    println!("Available audio input devices for host {}:", host.id().name());
-    for dev in host.input_devices()? {
-        println!(" • {}", dev.name()?);
-    }
-
-    println!();
-    println!("Available audio output devices for host {}:", host.id().name());
-    for dev in host.output_devices()? {
-        println!(" • {}", dev.name()?);
-    }
-
-    println!();
-    println!("Available MIDI input ports:");
-    let midi_context = PortMidi::new()?;
-    for dev in midi_context.devices()? {
-        println!(" • {}", dev);
     }
 
     return Ok(())
@@ -503,6 +334,8 @@ fn main() {
         .subcommand(App::new("list-ports"))
         .get_matches();
 
+
+    const SAMPLE_RATE: u32 = 44100;
     match app_m.subcommand() {
         ("batch", Some(sub_m)) => {
             let loop_time_seconds: Option<f32> = parse_f32_option(sub_m.value_of("loop-time-seconds"));
@@ -513,10 +346,11 @@ fn main() {
                 Err(string) => panic!("{}", string),
             };
 
+            let app_config = AppConfig::new(SAMPLE_RATE, loop_time);
             let audio_in = sub_m.value_of("INPUT").unwrap();
             let audio_out = sub_m.value_of("OUTPUT").unwrap();
             let operations_file = "ops.test";
-            run_batch(audio_in, audio_out, loop_time, operations_file);
+            cmd_batch::run_batch(&app_config, audio_in, audio_out, operations_file);
         },
         ("live", Some(sub_m)) => {
             let loop_time_seconds: Option<f32> = parse_f32_option(sub_m.value_of("loop-time-seconds"));
@@ -527,15 +361,16 @@ fn main() {
                 Err(string) => panic!("{}", string),
             };
 
+            let app_config = AppConfig::new(SAMPLE_RATE, loop_time);
             let midi_port: i32 = sub_m.value_of("midi-port").unwrap_or("0").
                                     parse::<i32>().unwrap();
             let input_file = sub_m.value_of("input-file");
             let input_device_name = sub_m.value_of("input-device");
             let output_device_name = sub_m.value_of("output-device");
-            run_live(midi_port, input_file, input_device_name, output_device_name, loop_time, bpm.unwrap_or(60.0)).unwrap();
+            run_live(&app_config, midi_port, input_file, input_device_name, output_device_name, loop_time, bpm.unwrap_or(60.0)).unwrap();
         },
         ("list-ports", Some(_)) => {
-            run_list_ports().unwrap();
+            cmd_list_ports::run_list_ports().unwrap();
         },
         _ => unreachable!()
     }
