@@ -20,7 +20,7 @@ pub type SamplePosition = usize;
 pub type SampleOffset = isize;
 
 pub struct Config {
-    pub sample_rate: u64,
+    pub sample_rate: u32,
     pub beats_to_samples: f32,
 }
 
@@ -35,7 +35,7 @@ impl Default for Config {
 
 pub struct Boucle {
     pub controller: PianoControl,
-    pub sample_rate: u64,
+    pub sample_rate: u32,
 }
 
 impl Boucle {

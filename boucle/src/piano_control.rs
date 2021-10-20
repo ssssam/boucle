@@ -72,7 +72,7 @@ struct RecordedMidiEvent {
 pub struct PianoControl {
     event_buffer: Vec<RecordedMidiEvent>,
 
-    sample_rate: u64,
+    sample_rate: u32,
     beats_to_samples: f32,
 
     active_reverse: Option<op_sequence::Entry>,
@@ -142,7 +142,7 @@ mod organelle {
 }
 
 impl PianoControl {
-    pub fn new(sample_rate: u64, beats_to_samples: f32) -> Self {
+    pub fn new(sample_rate: u32, beats_to_samples: f32) -> Self {
         PianoControl {
             event_buffer: Vec::new(),
             sample_rate,

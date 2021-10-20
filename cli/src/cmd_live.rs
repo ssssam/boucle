@@ -152,7 +152,7 @@ pub fn run_live(app_config: &AppConfig, midi_in_port: i32, audio_in_path: Option
     let audio_host = cpal::default_host();
 
     let config = boucle::Config {
-        sample_rate: app_config.sample_rate as u64,
+        sample_rate: app_config.sample_rate,
         beats_to_samples: (60.0 / bpm) * (app_config.sample_rate as f32)
     };
 
