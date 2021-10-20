@@ -1,3 +1,4 @@
+pub mod cpal_helpers;
 pub mod ops;
 pub mod op_sequence;
 pub mod patterns;

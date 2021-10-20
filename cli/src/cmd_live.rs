@@ -7,21 +7,12 @@ use log::*;
 use portmidi::{PortMidi};
 
 use boucle;
+use boucle::cpal_helpers;
 use boucle::Boucle;
 
 use crate::app_config::AppConfig;
 use crate::buffers::{InputBuffer, LoopBuffers, create_buffers, input_wav_to_buffer};
 use crate::app_error::AppError;
-
-fn get_audio_config(app_config: &AppConfig, device: &cpal::Device) -> cpal::SupportedStreamConfig {
-    let mut supported_configs_range = device.supported_output_configs()
-        .expect("error while querying configs");
-    let supported_config = supported_configs_range.next()
-        .expect("no supported config")
-        .with_sample_rate(cpal::SampleRate(app_config.sample_rate));
-    info!("audio config: {:?}", supported_config);
-    return supported_config;
-}
 
 fn open_in_stream<T: cpal::Sample>(device: cpal::Device,
                                    config: cpal::StreamConfig,
@@ -139,7 +130,7 @@ fn open_midi_in<'a>(midi_context: &'a portmidi::PortMidi, midi_in_port: i32) -> 
 }
 
 pub fn run_live(app_config: &AppConfig, midi_in_port: i32, audio_in_path: Option<&str>, input_device_name: Option<&str>,
-            output_device_name: Option<&str>, loop_time_seconds: f32, bpm: f32) -> Result<(), AppError> {
+                output_device_name: Option<&str>, loop_time_seconds: f32, bpm: f32) -> Result<(), AppError> {
     let midi_context = match PortMidi::new() {
         Ok(value) => value,
         Err(error) => return Err(AppError { message: format!("Cannot open PortMIDI: {}", error) }),
@@ -173,7 +164,7 @@ pub fn run_live(app_config: &AppConfig, midi_in_port: i32, audio_in_path: Option
             .expect("no output device available"),
     };
 
-    let supported_audio_config = get_audio_config(&app_config, &audio_out_device);
+    let supported_audio_config = cpal_helpers::get_audio_config(&config, &audio_out_device);
     let sample_format = supported_audio_config.sample_format();
     let input_audio_config: cpal::StreamConfig = supported_audio_config.clone().into();
     let output_audio_config: cpal::StreamConfig = supported_audio_config.into();
