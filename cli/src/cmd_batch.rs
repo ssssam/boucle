@@ -5,11 +5,12 @@ use std::fs::File;
 use dasp::{Sample};
 use log::*;
 
+use boucle::buffers::create_buffers;
 use boucle::op_sequence;
 use boucle::OpSequence;
 
 use crate::app_config::AppConfig;
-use crate::buffers::{create_buffers, input_wav_to_buffer};
+use crate::wav::input_wav_to_buffer;
 
 fn read_ops(sample_rate: u32, file_name: &str) -> Result<OpSequence, io::Error> {
     let mut text = String::new();

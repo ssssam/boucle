@@ -1,10 +1,10 @@
 mod app_config;
 mod app_error;
-mod buffers;
 mod cmd_batch;
 mod cmd_list_ports;
 mod cmd_live;
 mod tests;
+mod wav;
 
 use clap::{Arg, App};
 use log::*;

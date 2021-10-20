@@ -89,6 +89,7 @@ name = "boucle"
 version = "0.1.0"
 dependencies = [
  "cpal",
+ "dasp",
  "dyn-clone",
  "env_logger",
  "log",

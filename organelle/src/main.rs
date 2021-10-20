@@ -1,4 +1,4 @@
-pub mod boucle_organelle {
+fn main() {
     use nannou_osc as osc;
 
     pub fn main() {
@@ -19,8 +19,4 @@ pub mod boucle_organelle {
 
         println!("Sent a hello packet.")
     }
-}
-
-fn main() {
-    boucle_organelle::main();
 }

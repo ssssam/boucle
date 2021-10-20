@@ -1,3 +1,4 @@
+pub mod buffers;
 pub mod cpal_helpers;
 pub mod ops;
 pub mod op_sequence;
@@ -14,8 +15,6 @@ pub use piano_control::PianoControl;
 
 // This is the sample format used inside the audio engine.
 pub type Sample = f32;
-
-pub type Buffer = Vec<Sample>;
 
 pub type SamplePosition = usize;
 pub type SampleOffset = isize;
