@@ -1,3 +1,5 @@
+pub mod buffers;
+pub mod cpal_helpers;
 pub mod ops;
 pub mod op_sequence;
 pub mod patterns;
@@ -14,13 +16,11 @@ pub use piano_control::PianoControl;
 // This is the sample format used inside the audio engine.
 pub type Sample = f32;
 
-pub type Buffer = Vec<Sample>;
-
 pub type SamplePosition = usize;
 pub type SampleOffset = isize;
 
 pub struct Config {
-    pub sample_rate: u64,
+    pub sample_rate: u32,
     pub beats_to_samples: f32,
 }
 
@@ -35,7 +35,7 @@ impl Default for Config {
 
 pub struct Boucle {
     pub controller: PianoControl,
-    pub sample_rate: u64,
+    pub sample_rate: u32,
 }
 
 impl Boucle {
