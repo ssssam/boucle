@@ -58,7 +58,7 @@ pub fn run_live(app_config: &AppConfig, midi_in_port: i32, audio_in_path: Option
             .expect("no output device available"),
     };
 
-    let supported_audio_config = cpal_helpers::get_audio_config(&config, &audio_out_device);
+    let supported_audio_config = cpal_helpers::get_audio_config(&boucle_rc.lock().unwrap(), &audio_out_device);
     let sample_format = supported_audio_config.sample_format();
     let input_audio_config: cpal::StreamConfig = supported_audio_config.clone().into();
     let output_audio_config: cpal::StreamConfig = supported_audio_config.into();
