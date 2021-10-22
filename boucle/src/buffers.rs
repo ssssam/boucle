@@ -1,5 +1,3 @@
-use dasp;
-
 pub type Buffer = Vec<crate::Sample>;
 
 #[derive(PartialEq)]
