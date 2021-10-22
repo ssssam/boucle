@@ -2,7 +2,7 @@ mod patch_error;
 
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time;
+use std::time::{Duration,Instant};
 
 use cpal::traits::{DeviceTrait, HostTrait};
 use log::*;
@@ -93,6 +93,11 @@ impl Patch {
         };
 
         let output_audio_config: cpal::StreamConfig = supported_audio_config.into();
+        let _audio_out_stream = match sample_format {
+            cpal::SampleFormat::F32 => boucle::cpal_helpers::open_out_stream::<f32>(audio_out, output_audio_config, self.boucle_rc.clone(), self.buffers_rc.clone()),
+            cpal::SampleFormat::I16 => boucle::cpal_helpers::open_out_stream::<i16>(audio_out, output_audio_config, self.boucle_rc.clone(), self.buffers_rc.clone()),
+            cpal::SampleFormat::U16 => boucle::cpal_helpers::open_out_stream::<u16>(audio_out, output_audio_config, self.boucle_rc.clone(), self.buffers_rc.clone()),
+        };
 
         self.signal_loaded();
         self.update_screen();
@@ -103,12 +108,14 @@ impl Patch {
                 self.update_screen();
             }
 
-            thread::sleep(time::Duration::from_millis(10));
+            thread::sleep(Duration::from_millis(10));
         }
     }
 
     fn handle_key(self: &mut Self, key: i32, pressed: bool) -> UpdateScreenFlag {
         info!("Key {} {}", key, pressed);
+        let mut boucle = self.boucle_rc.lock().unwrap();
+        boucle.controller.record_midi_event(Instant::now(), 0, 0);
         return false;
     }
 
