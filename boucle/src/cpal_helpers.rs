@@ -6,7 +6,6 @@ use cpal::traits::{DeviceTrait};
 use log::*;
 
 use crate::Boucle;
-use crate::Config;
 use crate::buffers::{Buffer, InputBuffer,LoopBuffers};
 
 /// Return a valid cpal configuration for the given Boucle config.

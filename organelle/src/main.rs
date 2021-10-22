@@ -42,6 +42,8 @@ struct Patch {
     loop_beats: f32,
 }
 
+type UpdateScreenFlag = bool;
+
 impl Patch {
     pub fn new() -> Result<Self, PatchError> {
         let boucle_config = boucle::Config {
@@ -70,7 +72,7 @@ impl Patch {
         });
     }
 
-    pub fn run(self: &Self) -> Result<(), PatchError> {
+    pub fn run(self: &mut Self) -> Result<(), PatchError> {
         let audio_host = cpal::default_host();
 
         let audio_in = audio_host.default_input_device()
@@ -92,49 +94,130 @@ impl Patch {
 
         let output_audio_config: cpal::StreamConfig = supported_audio_config.into();
 
+        self.signal_loaded();
+        self.update_screen();
         loop {
-            self.process_events();
+            let update_screen = self.process_events();
+
+            if update_screen {
+                self.update_screen();
+            }
 
             thread::sleep(time::Duration::from_millis(10));
         }
     }
 
-    pub fn handle_osc(self: &Self, message: osc::Message) {
-        match message.addr.as_str() {
-            "/keys" => {
-                info!("Keys!");
-            },
-            "/knobs" => {
-                info!("Knobs!");
-            },
-            _ => {
-                warn!("Unhandled OSC message: {:?}", message);
-            },
-        }
+    fn handle_key(self: &mut Self, key: i32, pressed: bool) -> UpdateScreenFlag {
+        info!("Key {} {}", key, pressed);
+        return false;
     }
 
-    pub fn process_events(self: &Self) {
-        // Receive OSC events
-        for (packet, addr) in self.receiver.try_iter() {
-            debug!("Received OSC: {}: {:?}", addr, packet);
-            match packet {
-                osc::Packet::Message(message) => self.handle_osc(message),
-                osc::Packet::Bundle(_) => warn!("Unhandled OSC bundle")
+    fn handle_knobs(self: &mut Self, positions: [i32; 6]) -> UpdateScreenFlag {
+        info!("Knobs {} {} {} {} {} {}", positions[0], positions[1], positions[2],
+              positions[3], positions[4], positions[5]);
+
+        let mut update_screen = false;
+
+        fn scale_from_1024(min: f32, max: f32, value: i32) -> f32 {
+            let total = max - min;
+            let steps = 1024.0 / total;
+            return (value as f32 / 1024.0) * steps + min;
+        }
+
+        let new_bpm = scale_from_1024(MIN_BPM, MAX_BPM, positions[0]);
+        if new_bpm != self.bpm {
+            self.bpm = new_bpm;
+            update_screen = true;
+        }
+
+        let new_loop_beats = scale_from_1024(MIN_LOOP_BEATS, MAX_LOOP_BEATS, positions[0]);
+        if new_loop_beats != self.loop_beats {
+            self.loop_beats = new_loop_beats;
+            update_screen = true;
+        }
+
+        return update_screen;
+    }
+
+
+    fn handle_osc(self: &mut Self, message: &osc::Message) -> UpdateScreenFlag {
+        fn args(message: &osc::Message) -> &[osc::Type] {
+            match &message.args {
+                Some(args) => args.as_slice(),
+                None => &[],
             }
         }
 
-        let osc_addr = "/oled/line/1".to_string();
-        let args = vec![osc::Type::String("Hello from Boucle looper".to_string())];
-        let packet = (osc_addr, args);
+        match message.addr.as_str() {
+            "/keys" => {
+                if let [osc::Type::Int(key), osc::Type::Int(pressed)] = args(message) {
+                    if *key >= 0 && *key <= 24 {
+                        return self.handle_key(*key, *pressed >= 1);
+                    }
+                }
+            },
+            "/knobs" => {
+                if let [osc::Type::Int(k1), osc::Type::Int(k2), osc::Type::Int(k3),
+                        osc::Type::Int(k4), osc::Type::Int(k5),osc::Type::Int(k6)] = args(message) {
+                    if *k1 >= 0 && *k1 < 1024 &&
+                       *k2 >= 0 && *k2 < 1024 &&
+                       *k3 >= 0 && *k3 < 1024 &&
+                       *k4 >= 0 && *k4 < 1024 &&
+                       *k5 >= 0 && *k5 < 1024 &&
+                       *k6 >= 0 && *k6 < 1024 {
+                        return self.handle_knobs([*k1, *k2, *k3, *k4, *k5, *k6]);
+                    }
+                }
+            },
+            _ => {},
+        }
+        warn!("Unhandled OSC message: {:?}", message);
+        return false;
+    }
+
+    fn signal_loaded(self: &Self) {
+        let packet = ("/patchLoaded".to_string(), vec![]);
         self.sender.send(packet).ok();
+    }
+
+    fn update_screen(self: &Self) {
+        let header = format!("BPM: {}  Loop: {}", self.bpm, self.loop_beats);
+
+        let addr = "/oled/line/1".to_string();
+        let args = vec![osc::Type::String(header.to_string())];
+
+        let packet = (addr, args);
+        self.sender.send(packet).ok();
+    }
+
+    fn process_events(self: &mut Self) -> UpdateScreenFlag {
+        // Receive OSC events
+        let mut received: Vec<osc::Message> = Vec::new();
+        for (packet, addr) in self.receiver.try_iter() {
+            debug!("Received OSC: {}: {:?}", addr, packet);
+            match packet {
+                osc::Packet::Message(message) => received.push(message),
+                osc::Packet::Bundle(_) => warn!("Unhandled OSC bundle"),
+            }
+        }
+
+        // Handle OSC events
+        let mut update_screen: UpdateScreenFlag = false;
+        for message in received {
+            update_screen |= self.handle_osc(&message);
+        }
+
+        return update_screen;
     }
 }
 
 pub fn main() {
     env_logger::init();
 
-    let patch = Patch::new()
+    let mut patch = Patch::new()
         .map_err(|e| panic!("{}", e.message))
         .unwrap();
-    patch.run();
+    patch.run()
+        .map_err(|e| panic!("{}", e.message))
+        .unwrap();
 }
