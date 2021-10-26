@@ -88,7 +88,7 @@ pub fn open_out_stream<T: cpal::Sample>(device: cpal::Device,
                 let span = std::cmp::min(buffer_length - play_pos, data.len());
                 debug!("Play clock {} pos {}/{} span {} (total data {})", play_clock, play_pos, buffer_length, span, data.len());
 
-                let ops = boucle.controller.ops_for_period(play_clock, span);
+                let ops = boucle.event_recorder.ops_for_period(play_clock, span);
                 boucle.process_buffer(&in_buffer, play_clock, span,
                                       &ops, &mut |s| {
                     data[out_pos] = cpal::Sample::from(&s);
@@ -109,7 +109,7 @@ pub fn open_out_stream<T: cpal::Sample>(device: cpal::Device,
                         in_buffer = &mut buffers.input_a;
                     }
 
-                    let ops = boucle.controller.ops_for_period(play_clock, span_2);
+                    let ops = boucle.event_recorder.ops_for_period(play_clock, span_2);
                     boucle.process_buffer(&in_buffer, play_clock, span_2,
                                           &ops, &mut |s| {
                         data[out_pos] = cpal::Sample::from(&s);
@@ -124,7 +124,7 @@ pub fn open_out_stream<T: cpal::Sample>(device: cpal::Device,
             // Performer responds to what they hear.
             // The MIDI events we receive are therefore treated as relative
             // to the last thing the performer heard.
-            boucle.controller.set_event_sync_point(Instant::now(), play_clock);
+            boucle.event_recorder.set_event_sync_point(Instant::now(), play_clock);
         },
         move |err| { warn!("{}", err) }
     ).unwrap());

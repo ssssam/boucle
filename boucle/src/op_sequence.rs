@@ -1,5 +1,5 @@
 use crate::SamplePosition;
-use crate::ops::Op;
+use crate::ops::Operation;
 
 use std::fmt;
 
@@ -8,7 +8,7 @@ use std::fmt;
 pub struct Entry {
     pub start: SamplePosition,
     pub duration: Option<SamplePosition>,
-    pub op: Box<dyn Op + Send>,
+    pub operation: Operation,
 }
 
 impl fmt::Display for Entry {
@@ -17,7 +17,7 @@ impl fmt::Display for Entry {
             Some(duration) => format!("{:#?}", duration),
             None => format!("∞"),
         };
-        return write!(f, "({:#?}->{}): {:?}", self.start, end, self.op);
+        return write!(f, "({:#?}->{}): {:?}", self.start, end, self.operation);
     }
 }
 

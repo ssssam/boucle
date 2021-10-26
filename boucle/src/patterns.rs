@@ -3,7 +3,7 @@
 /*pub trait Pattern {
     fn get() -> 
 }*/
-use crate::ops;
+use crate::ops::Operation;
 use crate::op_sequence;
 
 type Beats = f32;
@@ -33,7 +33,7 @@ impl Pattern for CheckersReverse {
             Some(op_sequence::Entry {
                 start: (beat * beats_to_samples) as usize,
                 duration: Some((self.duration * beats_to_samples) as usize),
-                op: Box::new(ops::ReverseOp {}),
+                operation: Operation::Reverse,
             })
         } else {
             None

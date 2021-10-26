@@ -3,12 +3,12 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use cpal::traits::{DeviceTrait, HostTrait};
-use log::*;
 use portmidi::{PortMidi};
 
 use boucle;
-use boucle::buffers::{InputBuffer, LoopBuffers, create_buffers};
+use boucle::buffers::{LoopBuffers, create_buffers};
 use boucle::cpal_helpers;
+use boucle::control_surface::midi::MidiControlSurface;
 use boucle::Boucle;
 
 use crate::app_config::AppConfig;
@@ -38,7 +38,7 @@ pub fn run_live(app_config: &AppConfig, midi_in_port: i32, audio_in_path: Option
 
     let config = boucle::Config {
         sample_rate: app_config.sample_rate,
-        beats_to_samples: (60.0 / bpm) * (app_config.sample_rate as f32)
+        beat_fraction_to_samples: (60.0 / bpm / 16.0) * (app_config.sample_rate as f32)
     };
 
     let boucle: boucle::Boucle = boucle::Boucle::new(&config);
@@ -95,12 +95,19 @@ pub fn run_live(app_config: &AppConfig, midi_in_port: i32, audio_in_path: Option
         cpal::SampleFormat::U16 => cpal_helpers::open_out_stream::<u16>(audio_out_device, output_audio_config, boucle_rc.clone(), buf_rc.clone()),
     };
 
+    let interface = boucle::control_surface::midi::op1::Op1 {};
+
     while let Ok(_) = midi_in.poll() {
         if let Ok(Some(event)) = midi_in.read_n(1024) {
             let event2: &portmidi::MidiEvent = event.get(0).unwrap();
 
             let mut boucle = boucle_rc.lock().unwrap();
-            boucle.controller.record_midi_event(Instant::now(), event2.message.status, event2.message.data1);
+            let (state_change, operation) = interface.map_midi_message(
+                event2.message.status,
+                event2.message.data1,
+            );
+
+            boucle.event_recorder.record_event(Instant::now(), state_change, operation);
         }
 
         // there is no blocking receive method in PortMidi

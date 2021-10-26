@@ -1,48 +1,53 @@
 pub mod buffers;
+pub mod control_surface;
 pub mod cpal_helpers;
+pub mod event;
+pub mod event_recorder;
 pub mod ops;
 pub mod op_sequence;
 pub mod patterns;
-pub mod piano_control;
+pub mod units;
 mod tests;
 
 use std::convert::TryInto;
 
 use log::*;
 
+pub use control_surface::midi::MidiControlSurface;
+pub use event_recorder::EventRecorder;
+pub use ops::Operation;
 pub use op_sequence::OpSequence;
-pub use piano_control::PianoControl;
-
-// This is the sample format used inside the audio engine.
-pub type Sample = f32;
-
-pub type SamplePosition = usize;
-pub type SampleOffset = isize;
+pub use units::BeatFraction;
+pub use units::Sample;
+pub use units::SampleOffset;
+pub use units::SamplePosition;
 
 pub struct Config {
     pub sample_rate: u32,
-    pub beats_to_samples: f32,
+    pub beat_fraction_to_samples: f32,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Config {
             sample_rate: 44100,
-            beats_to_samples: 44100.0    /* Assumes 1 beat = 1 second at 44.1KHz */
+            beat_fraction_to_samples: 44100.0 / 16.0   /* Assumes 1 beat = 1 second at 44.1KHz */
         }
     }
 }
 
 pub struct Boucle {
-    pub controller: PianoControl,
+    pub event_recorder: EventRecorder,
     pub sample_rate: u32,
+    pub beat_fraction_to_samples: f32,
 }
 
 impl Boucle {
     pub fn new(config: &Config) -> Boucle {
         return Boucle {
-            controller: PianoControl::new(config.sample_rate, config.beats_to_samples),
+            event_recorder: EventRecorder::new(config.sample_rate),
             sample_rate: config.sample_rate,
+            beat_fraction_to_samples: config.beat_fraction_to_samples,
         }
     }
 
@@ -52,7 +57,13 @@ impl Boucle {
 
         for entry in op_sequence {
             if op_sequence::op_active(entry, play_clock) {
-                let transform = entry.op.get_transform(play_clock, entry.start, loop_length);
+                let transform = ops::get_transform(
+                    entry.operation,
+                    self.beat_fraction_to_samples,
+                    play_clock,
+                    entry.start,
+                    loop_length
+                );
                 transformed_clock += transform;
             }
         }

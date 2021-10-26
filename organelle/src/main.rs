@@ -2,9 +2,9 @@ mod patch_error;
 
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration,Instant};
+use std::time::{Duration};
 
-use cpal::traits::{DeviceTrait, HostTrait};
+use cpal::traits::{HostTrait};
 use log::*;
 use nannou_osc as osc;
 
@@ -48,7 +48,7 @@ impl Patch {
     pub fn new() -> Result<Self, PatchError> {
         let boucle_config = boucle::Config {
             sample_rate: SAMPLE_RATE,
-            beats_to_samples: (60.0 / DEFAULT_BPM) * (SAMPLE_RATE as f32)
+            beat_fraction_to_samples: (60.0 / DEFAULT_BPM / 16.0) * (SAMPLE_RATE as f32)
         };
 
         let boucle: boucle::Boucle = boucle::Boucle::new(&boucle_config);
@@ -115,7 +115,9 @@ impl Patch {
     fn handle_key(self: &mut Self, key: i32, pressed: bool) -> UpdateScreenFlag {
         info!("Key {} {}", key, pressed);
         let mut boucle = self.boucle_rc.lock().unwrap();
-        boucle.controller.record_midi_event(Instant::now(), 0, 0);
+        // Need to construct an Operation and StateChange from the OSC key event, then record it
+        // here.
+        //boucle.event_recorder.record_midi_event(Instant::now(), 0, 0);
         return false;
     }
 

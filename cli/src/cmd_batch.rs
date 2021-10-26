@@ -18,11 +18,11 @@ fn read_ops(sample_rate: u32, file_name: &str) -> Result<OpSequence, io::Error> 
     let mut file = File::open(file_name)?;
     file.read_to_string(&mut text)?;
     for line in text.lines() {
-        let (start_seconds, duration_seconds, op) = boucle::ops::new_from_string(line).expect("Failed to parse line");
+        let (start_seconds, duration_seconds, operation) = boucle::ops::new_from_string(line).expect("Failed to parse line");
         op_sequence.push(op_sequence::Entry {
             start: (start_seconds * sample_rate as f64) as usize,
             duration: Some((duration_seconds * sample_rate as f64) as usize),
-            op
+            operation
         });
     }
     return Ok(op_sequence);
