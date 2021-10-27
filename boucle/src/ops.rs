@@ -11,6 +11,7 @@ use log::*;
 #[derive(Clone)]
 #[derive(Copy)]
 #[derive(Debug)]
+#[derive(PartialEq)]
 pub enum Operation {
     NoOp,
     Reverse,
