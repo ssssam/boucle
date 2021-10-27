@@ -2,14 +2,17 @@ mod patch_error;
 
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration};
+use std::time::{Duration, Instant};
 
 use cpal::traits::{HostTrait};
 use log::*;
 use nannou_osc as osc;
 
+use boucle::BeatFraction;
 use boucle::Boucle;
 use boucle::buffers::LoopBuffers;
+use boucle::event::StateChange;
+use boucle::Operation;
 use crate::patch_error::PatchError;
 
 // These ports are defined in
@@ -44,7 +47,7 @@ struct Patch {
 
 type UpdateScreenFlag = bool;
 
-fn map_key(key: u8) -> Operation {
+fn map_key(key: i32) -> Operation {
     match key {
         0  /* Aux */ => Operation::NoOp,
         1  /* C4 */  => Operation::Jump { offset: BeatFraction::from(-8.0) },
@@ -150,12 +153,12 @@ impl Patch {
     fn handle_key(self: &mut Self, key: i32, pressed: bool) -> UpdateScreenFlag {
         info!("Key {} {}", key, pressed);
         let mut boucle = self.boucle_rc.lock().unwrap();
-        let operation = map_key(pressed);
+        let operation = map_key(key);
         let state_change = match pressed {
-            0 => StateChange::Off,
-            _ => StateChange::On,
-        }
-        boucle.event_recorder.record_event(Instant::now(), operation, state_change);
+            false => StateChange::Off,
+            true => StateChange::On,
+        };
+        boucle.event_recorder.record_event(Instant::now(), state_change, operation);
         return false;
     }
 
