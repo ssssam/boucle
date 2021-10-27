@@ -44,6 +44,41 @@ struct Patch {
 
 type UpdateScreenFlag = bool;
 
+fn map_key(key: u8) -> Operation {
+    match key {
+        0  /* Aux */ => Operation::NoOp,
+        1  /* C4 */  => Operation::Jump { offset: BeatFraction::from(-8.0) },
+        2            => Operation::Jump { offset: BeatFraction::from(-4.0) },
+        3            => Operation::Jump { offset: BeatFraction::from(-2.0) },
+        4            => Operation::Jump { offset: BeatFraction::from(-1.0) },
+        5  /* E4 */  => Operation::Jump { offset: BeatFraction::from(-0.5) },
+        6  /* F4 */  => Operation::Jump { offset: BeatFraction::from(-0.25) },
+        7            => Operation::NoOp,
+        8            => Operation::Repeat { loop_size: BeatFraction::from(0.0625) },
+        9  /* G#4 */ => Operation::Repeat { loop_size: BeatFraction::from(0.125) },
+        10           => Operation::Repeat { loop_size: BeatFraction::from(0.25) },
+        11 /* Bb4 */ => Operation::Repeat { loop_size: BeatFraction::from(0.5) },
+        12 /* B4 */  => Operation::Reverse,
+        13 /* C5 */  => Operation::NoOp,
+        14           => Operation::Repeat { loop_size: BeatFraction::from(1.0) },
+        15 /* D5 */  => Operation::Repeat { loop_size: BeatFraction::from(2.0) },
+        16           => Operation::Repeat { loop_size: BeatFraction::from(4.0) },
+        17 /* E5 */  => Operation::Repeat { loop_size: BeatFraction::from(8.0) },
+        18 /* F5 */  => Operation::Jump { offset: BeatFraction::from(0.25) },
+        19 /* Gb5 */ => Operation::NoOp,
+        20           => Operation::Jump { offset: BeatFraction::from(0.5) },
+        21           => Operation::Jump { offset: BeatFraction::from(1.0) },
+        22           => Operation::Jump { offset: BeatFraction::from(2.0) },
+        23           => Operation::Jump { offset: BeatFraction::from(4.0) },
+        24           => Operation::Jump { offset: BeatFraction::from(8.0) },
+        _ => {
+            warn!("Unmapped key: {}", key);
+            Operation::NoOp
+        },
+    }
+}
+
+
 impl Patch {
     pub fn new() -> Result<Self, PatchError> {
         let boucle_config = boucle::Config {
@@ -115,9 +150,12 @@ impl Patch {
     fn handle_key(self: &mut Self, key: i32, pressed: bool) -> UpdateScreenFlag {
         info!("Key {} {}", key, pressed);
         let mut boucle = self.boucle_rc.lock().unwrap();
-        // Need to construct an Operation and StateChange from the OSC key event, then record it
-        // here.
-        //boucle.event_recorder.record_midi_event(Instant::now(), 0, 0);
+        let operation = map_key(pressed);
+        let state_change = match pressed {
+            0 => StateChange::Off,
+            _ => StateChange::On,
+        }
+        boucle.event_recorder.record_event(Instant::now(), operation, state_change);
         return false;
     }
 
