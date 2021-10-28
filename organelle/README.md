@@ -5,6 +5,14 @@ from Critter and Guitari.
 
 I test it on Organelle 1 and build using [this Buildroot tree](https://gitlab.com/samthursfield/organelle-ports/).
 
+## Building
+
+Assuming you have built the organelle-ports tree or unpacked the SDK, you can
+build for Organelle like this:
+
+    export SDK_PATH=/home/sam/src/organelle-ports/output/host
+    env PKG_CONFIG_ALLOW_CROSS=1 PATH="$SDK_PATH/bin:$SDK_PATH/sbin:$PATH" CARGO_HOME=$SDK_PATH/share/cargo $SDK_PATH/bin/cargo build --release --target=armv7-unknown-linux-gnueabihf
+
 ## Manual testing
 
 You can control the program on a developer machine using `oscsend` and `oscdump`.
