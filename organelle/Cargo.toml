@@ -6,6 +6,7 @@ include = ["data/*"]
 
 [dependencies]
 boucle = { path = "../boucle" }
+clap = "2"
 # We pin cpal version to work around https://github.com/RustAudio/cpal/issues/606
 cpal = "=0.13.3"
 env_logger = "^0.9.0"

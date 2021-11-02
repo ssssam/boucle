@@ -4,7 +4,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use cpal::traits::{HostTrait};
+use clap::{Arg, App};
+use cpal::traits::{DeviceTrait, HostTrait};
 use log::*;
 use nannou_osc as osc;
 
@@ -110,13 +111,31 @@ impl Patch {
         });
     }
 
-    pub fn run(self: &mut Self) -> Result<(), PatchError> {
+    pub fn run(self: &mut Self,
+               input_device_name: Option<&str>,
+               output_device_name: Option<&str>) -> Result<(), PatchError> {
         let audio_host = cpal::default_host();
+        info!("cpal host: {:?}, input: {:?}, output: {:?}", audio_host.id(), input_device_name, output_device_name);
 
-        let audio_in = audio_host.default_input_device()
-            .ok_or(PatchError { message: "Unable to open default input device".to_string() })?;
-        let audio_out = audio_host.default_output_device()
-            .ok_or(PatchError { message: "Unable to open default input device".to_string() })?;
+        let audio_out = match output_device_name {
+            Some(name) => audio_host.output_devices()?
+                .find(|d| {
+                    info!("matching {} with {:?}", name, d.name());
+                    name == d.name().unwrap_or("".to_string())
+                })
+                .expect(format!("no output device found matching '{}'", name).as_str()),
+            None => audio_host.default_output_device()
+                .expect("no output device available"),
+        };
+
+        let audio_in = match input_device_name {
+            Some(name) => audio_host.input_devices()?
+                .find(|d| name == d.name().unwrap_or("".to_string()))
+                .expect(format!("no input device found matching '{}'", name).as_str()),
+            None => audio_host.default_input_device()
+                .expect("no input device available"),
+        };
+
         let supported_audio_config = boucle::cpal_helpers::get_audio_config(&self.boucle_rc.lock().unwrap(), &audio_out);
 
         let sample_format = supported_audio_config.sample_format();
@@ -264,10 +283,29 @@ impl Patch {
 pub fn main() {
     env_logger::init();
 
+    let app_m = App::new("Boucle looper for Organelle")
+        .version("1.0")
+        .arg(Arg::with_name("input-device")
+             .long("input-device")
+             .short("i")
+             .help("Record audio from device")
+             .takes_value(true)
+             .value_name("NAME"))
+        .arg(Arg::with_name("output-device")
+             .long("output-device")
+             .short("o")
+             .help("Play audio to device")
+             .takes_value(true)
+             .value_name("NAME"))
+        .get_matches();
+
+    let audio_in = app_m.value_of("input-device");
+    let audio_out = app_m.value_of("output-device");
+
     let mut patch = Patch::new()
         .map_err(|e| panic!("{}", e.message))
         .unwrap();
-    patch.run()
+    patch.run(audio_in, audio_out)
         .map_err(|e| panic!("{}", e.message))
         .unwrap();
 }
