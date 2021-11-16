@@ -213,11 +213,11 @@ impl Patch {
         let boucle_rc = self.boucle_rc.clone();
         let buffers_rc = self.buffers_rc.clone();
         let process_callback = move |_: &jack::Client, ps: &jack::ProcessScope| -> jack::Control {
+            let mut boucle = boucle_rc.lock().unwrap();
             let mut buffers = buffers_rc.lock().unwrap();
-
-            let buffer_length = buffers.input_a.len();
-
+            let mut play_clock = buffers.play_clock.clone();
             let mut record_pos = buffers.record_pos.clone();
+            let loop_length = boucle.loop_length();
 
             // Read input into buffer
             {
@@ -229,7 +229,7 @@ impl Patch {
                 for &s in in_port.as_slice(ps) {
                     record_buffer[record_pos] = s;
                     record_pos += 1;
-                    if record_pos >= buffer_length {
+                    if record_pos >= loop_length {
                         if buffers.current_input == InputBuffer::A {
                             buffers.current_input = InputBuffer::B;
                             record_buffer = &mut buffers.input_b;
@@ -245,9 +245,6 @@ impl Patch {
 
             buffers.record_pos = record_pos;
 
-            let mut boucle = boucle_rc.lock().unwrap();
-            let mut play_clock = buffers.play_clock.clone();
-
             let out_buf = out_port.as_mut_slice(ps);
             {
                 let mut in_buffer = match buffers.current_output {
@@ -256,9 +253,9 @@ impl Patch {
                 };
 
                 let mut out_pos = 0;
-                let play_pos = play_clock % buffer_length;
-                let span = std::cmp::min(buffer_length - play_pos, out_buf.len());
-                debug!("Play clock {} pos {}/{} span {} (total data {})", play_clock, play_pos, buffer_length, span, out_buf.len());
+                let play_pos = play_clock % loop_length;
+                let span = std::cmp::min(loop_length - play_pos, out_buf.len());
+                debug!("Play clock {} pos {}/{} span {} (total data {})", play_clock, play_pos, loop_length, span, out_buf.len());
 
                 let ops = boucle.event_recorder.ops_for_period(play_clock, span);
                 boucle.process_buffer(&in_buffer, play_clock, span,
@@ -300,7 +297,7 @@ impl Patch {
             jack::Control::Continue
         };
 
-        let active_client = client.activate_async(
+        let _active_client = client.activate_async(
             JackNotifications,
             jack::ClosureProcessHandler::new(process_callback),
         );
@@ -365,7 +362,7 @@ impl Patch {
         }
 
         match message.addr.as_str() {
-            "/keys" => {
+            "/key" => {
                 if let [osc::Type::Int(key), osc::Type::Int(pressed)] = args(message) {
                     if *key >= 0 && *key <= 24 {
                         return self.handle_key(*key, *pressed >= 1);
