@@ -51,8 +51,13 @@ impl Boucle {
         }
     }
 
+    pub fn loop_length(self: &Boucle) -> SamplePosition {
+        // FIXME:
+        return self.sample_rate as SamplePosition * 4;
+    }
+
     pub fn next_sample(self: &Boucle, loop_buffer: &[Sample], op_sequence: &OpSequence, play_clock: SamplePosition) -> Sample {
-        let loop_length = loop_buffer.len();
+        let loop_length = self.loop_length();
         let mut transformed_clock: SampleOffset = play_clock.try_into().unwrap();
 
         for entry in op_sequence {
@@ -85,7 +90,7 @@ impl Boucle {
                           out_buffer_length: SamplePosition,
                           ops: &OpSequence,
                           write_sample: &mut dyn FnMut(Sample)) {
-        let loop_length = loop_buffer.len();
+        let loop_length = self.loop_length();
         info!("Buffer is {:#?} samples long, playing at {:?} for {:#?}", loop_length, play_clock, out_buffer_length);
 
         for sample in 0..out_buffer_length {
