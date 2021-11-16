@@ -9,6 +9,7 @@ vst = { version = "0.2.1", optional = true }
 [lib]
 name = "boucle_vst"
 crate-type = ["cdylib"]
+required-features = ["boucle_vst"]
 
 [features]
 boucle_vst = ["vst"]
