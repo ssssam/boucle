@@ -49,7 +49,7 @@ pub fn run_batch(config: &AppConfig, audio_in_path: &str, audio_out: &str, opera
     };
     let mut writer = hound::WavWriter::create(audio_out, out_spec).unwrap();
 
-    let boucle: boucle::Boucle = boucle::Boucle::new(&boucle::Config::default());
+    let boucle: boucle::Boucle = boucle::Boucle::new(&boucle::Config::default(), buffer_size_samples);
     boucle.process_buffer(&buffers.input_a, 0, buffers.input_a.len(), &op_sequence, &mut |s| {
         let s_i16 = s.to_sample::<i16>();
         writer.write_sample(s_i16).unwrap();

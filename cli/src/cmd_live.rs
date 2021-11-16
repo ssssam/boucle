@@ -41,12 +41,12 @@ pub fn run_live(app_config: &AppConfig, midi_in_port: i32, audio_in_path: Option
         beat_fraction_to_samples: (60.0 / bpm / 16.0) * (app_config.sample_rate as f32)
     };
 
-    let boucle: boucle::Boucle = boucle::Boucle::new(&config);
-    let boucle_rc: Arc<Mutex<Boucle>> = Arc::new(Mutex::new(boucle));
-
     let buffer_size_samples: usize = (loop_time_seconds * app_config.sample_rate as f32).floor() as usize;
     let buffers = create_buffers(buffer_size_samples);
     let buf_rc: Arc<Mutex<LoopBuffers>> = Arc::new(Mutex::new(buffers));
+
+    let boucle: boucle::Boucle = boucle::Boucle::new(&config, buffer_size_samples);
+    let boucle_rc: Arc<Mutex<Boucle>> = Arc::new(Mutex::new(boucle));
 
     let audio_in_device;
     let _audio_in_stream;

@@ -40,19 +40,31 @@ pub struct Boucle {
     pub event_recorder: EventRecorder,
     pub sample_rate: u32,
     pub beat_fraction_to_samples: f32,
+    pub loop_length: SamplePosition,
 }
 
 impl Boucle {
-    pub fn new(config: &Config) -> Boucle {
+    pub fn new(config: &Config, loop_length: SamplePosition) -> Boucle {
         return Boucle {
             event_recorder: EventRecorder::new(config.sample_rate),
             sample_rate: config.sample_rate,
             beat_fraction_to_samples: config.beat_fraction_to_samples,
+            loop_length: loop_length,
         }
     }
 
+    // When increasing loop length, old recordings may play from the buffer.
+    // It's up to caller to erase these if desired before updating loop length.
+    pub fn set_loop_length(self: &mut Self, loop_length: SamplePosition) {
+        self.loop_length = loop_length;
+    }
+
+    pub fn loop_length(self: &Boucle) -> SamplePosition {
+        return self.loop_length;
+    }
+
     pub fn next_sample(self: &Boucle, loop_buffer: &[Sample], op_sequence: &OpSequence, play_clock: SamplePosition) -> Sample {
-        let loop_length = loop_buffer.len();
+        let loop_length = self.loop_length();
         let mut transformed_clock: SampleOffset = play_clock.try_into().unwrap();
 
         for entry in op_sequence {
@@ -85,8 +97,9 @@ impl Boucle {
                           out_buffer_length: SamplePosition,
                           ops: &OpSequence,
                           write_sample: &mut dyn FnMut(Sample)) {
-        let loop_length = loop_buffer.len();
-        info!("Buffer is {:#?} samples long, playing at {:?} for {:#?}", loop_length, play_clock, out_buffer_length);
+        let loop_length = self.loop_length();
+        info!("Buffer is {:#?} samples long, loop is {:#?} playing at {:?} for {:#?}",
+              loop_buffer.len(), loop_length, play_clock, out_buffer_length);
 
         for sample in 0..out_buffer_length {
             let s = self.next_sample(&loop_buffer, ops, play_clock + sample);

@@ -175,7 +175,8 @@ impl Patch {
             beat_fraction_to_samples: (60.0 / DEFAULT_BPM / 16.0) * (SAMPLE_RATE as f32)
         };
 
-        let boucle: boucle::Boucle = boucle::Boucle::new(&boucle_config);
+        let initial_loop_size = (boucle_config.beat_fraction_to_samples * DEFAULT_LOOP_BEATS) as usize;
+        let boucle: boucle::Boucle = boucle::Boucle::new(&boucle_config, initial_loop_size);
 
         let max_buffer_time = ((60.0 / MIN_BPM) * MAX_LOOP_BEATS).ceil() as usize;
         info!("Maximium buffer time: {} seconds", max_buffer_time);
