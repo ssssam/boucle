@@ -56,6 +56,8 @@ Hooray!
 
 [The Finger](https://www.native-instruments.com/en/products/komplete/effects/the-finger/) ([video](https://www.youtube.com/watch?v=wrj6pkQloJM))
 
+[Timetosser](https://www.alter.audio/)
+
 Tweakbench [Dropout](http://www.tweakbench.com/dropout) and [Yoink](http://www.tweakbench.com/yoink)
 
 [Vox Dynamic Looper](http://www.voxamps.com/vdl1)
