@@ -30,7 +30,7 @@ fn calculate_loop_time(seconds: Option<f32>, beats: Option<f32>, bpm: Option<f32
             return Err("Loop size in beats requires a BPM".to_string());
         }
     } else {
-        return Err("Must specify loop size in either seconds or beats".to_string());
+        return Err("Must specify loop time in either seconds or beats".to_string());
     };
 }
 
