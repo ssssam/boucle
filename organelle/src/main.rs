@@ -394,7 +394,7 @@ impl Patch {
     }
 
     fn update_screen(self: &Self) {
-        let header = format!("BPM: {}  Loop: {}", self.bpm, self.loop_beats);
+        let header = format!("BPM: {.1}  Loop: {}", self.bpm, self.loop_beats);
 
         let addr = "/oled/line/1".to_string();
         let args = vec![osc::Type::String(header.to_string())];
