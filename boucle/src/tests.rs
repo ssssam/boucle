@@ -126,8 +126,8 @@ mod operations {
 
     #[test]
     fn basic_reverse() {
-        let boucle: Boucle = Boucle::new(&TEST_CONFIG);
         let input = make_buffer(&[1,2,3,4, 5,6,7,8]);
+        let boucle: Boucle = Boucle::new(&TEST_CONFIG, input.len());
 
         let ops: OpSequence = vec!(
             op_sequence::Entry { start: 3, duration: Some(10), operation: Operation::Reverse },
@@ -141,8 +141,8 @@ mod operations {
 
     #[test]
     fn basic_jump() {
-        let boucle: Boucle = Boucle::new(&TEST_CONFIG);
         let input = make_buffer(&[1,2,3,4, 5,6,7,8, 9,10,11,12, 13,14,15,16]);
+        let boucle: Boucle = Boucle::new(&TEST_CONFIG, input.len());
 
         let ops: OpSequence = vec!(
             op_sequence::Entry { start: 4, duration: Some(4), operation: Operation::Jump { offset: BeatFraction::from(-4.0) } },
@@ -157,8 +157,8 @@ mod operations {
 
     #[test]
     fn basic_repeat() {
-        let boucle: Boucle = Boucle::new(&TEST_CONFIG);
         let input = make_buffer(&[1,2,3,4, 5,6,7,8, 9,10,11,12, 13,14,15,16, 17,18,19,20, 21,22,23,24]);
+        let boucle: Boucle = Boucle::new(&TEST_CONFIG, input.len());
 
         let ops: OpSequence = vec!(
             op_sequence::Entry { start: 0, duration: Some(20), operation: Operation::Repeat { loop_size: BeatFraction::from(8.0) } },
