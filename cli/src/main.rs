@@ -146,6 +146,10 @@ fn main() {
         ("list-ports", Some(_)) => {
             cmd_list_ports::run_list_ports().unwrap();
         },
-        _ => unreachable!()
+        _ => {
+            println!("{}", app_m.usage());
+            println!();
+            println!("Run with `--help` to see subcommands.")
+        }
     }
 }
