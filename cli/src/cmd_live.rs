@@ -15,24 +15,38 @@ use crate::app_config::AppConfig;
 use crate::app_error::AppError;
 use crate::wav::input_wav_to_buffer;
 
-fn open_midi_in<'a>(midi_context: &'a portmidi::PortMidi, midi_in_port: i32) -> Result<Box<portmidi::InputPort<'a>>, portmidi::Error> {
-    let midi_info = midi_context.device(midi_in_port)?;
-    match midi_context.input_port(midi_info, 1024) {
-        Ok(port) => return Ok(Box::new(port)),
-        Err(error) => return Err(error),
-    };
+fn open_midi_in<'a>(midi_context: &'a portmidi::PortMidi, midi_in_port: Option<i32>) -> Result<Option<Box<portmidi::InputPort<'a>>>, portmidi::Error> {
+    const DEFAULT_MIDI_IN_PORT = 0;
+    match midi_in_port {
+        None => {
+            info!("Opening default MIDI port 0...");
+            let midi_info = midi_context.device(DEFAULT_MIDI_IN_PORT)?;
+            match midi_context.input_port(midi_info, 1024) {
+                Ok(port) => Ok(Some(Box::new(port))),
+                Err(error) => {
+                    warn!("Failed to open MIDI: {}", err);
+                    Ok(None)
+                }
+            };
+        },
+
+        Some(port) => {
+            let midi_info = midi_context.device(port)?;
+            match midi_context.input_port(midi_info, 1024) {
+                Ok(port) => Ok(Some(Box::new(port))),
+                Err(error) => Err(AppError { message: format!("Cannot open MIDI input: {}", error) })
+        }
+    }
 }
 
-pub fn run_live(app_config: &AppConfig, midi_in_port: i32, audio_in_path: Option<&str>, input_device_name: Option<&str>,
+pub fn run_live(app_config: &AppConfig, midi_in_port: Option<i32>, audio_in_path: Option<&str>, input_device_name: Option<&str>,
                 output_device_name: Option<&str>, loop_time_seconds: f32, bpm: f32) -> Result<(), AppError> {
     let midi_context = match PortMidi::new() {
         Ok(value) => value,
         Err(error) => return Err(AppError { message: format!("Cannot open PortMIDI: {}", error) }),
     };
-    let midi_in = match open_midi_in(&midi_context, midi_in_port) {
-        Ok(value) => value,
-        Err(error) => return Err(AppError { message: format!("Cannot open MIDI input: {}", error) }),
-    };
+
+    let midi_in = open_midi_in(midi_in_port)?;
 
     let audio_host = cpal::default_host();
 

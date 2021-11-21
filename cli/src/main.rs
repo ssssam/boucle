@@ -34,6 +34,15 @@ fn calculate_loop_time(seconds: Option<f32>, beats: Option<f32>, bpm: Option<f32
     };
 }
 
+fn get_midi_port(text: Option<&str>) -> Option<i32> {
+    match text {
+        None => None,
+        Some(text) => {
+            Some(text.parse::<i32>().unwrap())
+        }
+    }
+}
+
 fn main() {
     env_logger::init();
 
@@ -136,8 +145,7 @@ fn main() {
             };
 
             let app_config = AppConfig::new(SAMPLE_RATE, loop_time);
-            let midi_port: i32 = sub_m.value_of("midi-port").unwrap_or("0").
-                                    parse::<i32>().unwrap();
+            let midi_port = get_midi_port(sub_m.value_of("midi-port"));
             let input_file = sub_m.value_of("input-file");
             let input_device_name = sub_m.value_of("input-device");
             let output_device_name = sub_m.value_of("output-device");
