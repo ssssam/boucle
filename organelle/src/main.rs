@@ -4,13 +4,12 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use cpal::traits::{HostTrait};
 use log::*;
 use nannou_osc as osc;
 
 use boucle::BeatFraction;
 use boucle::Boucle;
-use boucle::buffers::LoopBuffers;
+use boucle::buffers::{Buffer, InputBuffer, LoopBuffers};
 use boucle::event::StateChange;
 use boucle::Operation;
 use crate::patch_error::PatchError;
@@ -82,6 +81,93 @@ fn map_key(key: i32) -> Operation {
 }
 
 
+struct JackNotifications;
+
+impl jack::NotificationHandler for JackNotifications {
+    fn thread_init(&self, _: &jack::Client) {
+        info!("JACK: thread init");
+    }
+
+    fn shutdown(&mut self, status: jack::ClientStatus, reason: &str) {
+        info!(
+            "JACK: shutdown with status {:?} because \"{}\"",
+            status, reason
+        );
+    }
+
+    fn freewheel(&mut self, _: &jack::Client, is_enabled: bool) {
+        info!(
+            "JACK: freewheel mode is {}",
+            if is_enabled { "on" } else { "off" }
+        );
+    }
+
+    fn sample_rate(&mut self, _: &jack::Client, srate: jack::Frames) -> jack::Control {
+        // FIXME: We need to handle this.
+        info!("JACK: sample rate changed to {}", srate);
+        jack::Control::Continue
+    }
+
+    fn client_registration(&mut self, _: &jack::Client, name: &str, is_reg: bool) {
+        info!(
+            "JACK: {} client with name \"{}\"",
+            if is_reg { "registered" } else { "unregistered" },
+            name
+        );
+    }
+
+    fn port_registration(&mut self, _: &jack::Client, port_id: jack::PortId, is_reg: bool) {
+        info!(
+            "JACK: {} port with id {}",
+            if is_reg { "registered" } else { "unregistered" },
+            port_id
+        );
+    }
+
+    fn port_rename(
+        &mut self,
+        _: &jack::Client,
+        port_id: jack::PortId,
+        old_name: &str,
+        new_name: &str,
+    ) -> jack::Control {
+        info!(
+            "JACK: port with id {} renamed from {} to {}",
+            port_id, old_name, new_name
+        );
+        jack::Control::Continue
+    }
+
+    fn ports_connected(
+        &mut self,
+        _: &jack::Client,
+        port_id_a: jack::PortId,
+        port_id_b: jack::PortId,
+        are_connected: bool,
+    ) {
+        info!(
+            "JACK: ports with id {} and {} are {}",
+            port_id_a,
+            port_id_b,
+            if are_connected {
+                "connected"
+            } else {
+                "disconnected"
+            }
+        );
+    }
+
+    fn graph_reorder(&mut self, _: &jack::Client) -> jack::Control {
+        info!("JACK: graph reordered");
+        jack::Control::Continue
+    }
+
+    fn xrun(&mut self, _: &jack::Client) -> jack::Control {
+        info!("JACK: xrun occurred");
+        jack::Control::Continue
+    }
+}
+
 impl Patch {
     pub fn new() -> Result<Self, PatchError> {
         let boucle_config = boucle::Config {
@@ -89,7 +175,8 @@ impl Patch {
             beat_fraction_to_samples: (60.0 / DEFAULT_BPM / 16.0) * (SAMPLE_RATE as f32)
         };
 
-        let boucle: boucle::Boucle = boucle::Boucle::new(&boucle_config);
+        let initial_loop_size = (boucle_config.beat_fraction_to_samples * DEFAULT_LOOP_BEATS) as usize;
+        let boucle: boucle::Boucle = boucle::Boucle::new(&boucle_config, initial_loop_size);
 
         let max_buffer_time = ((60.0 / MIN_BPM) * MAX_LOOP_BEATS).ceil() as usize;
         info!("Maximium buffer time: {} seconds", max_buffer_time);
@@ -111,34 +198,111 @@ impl Patch {
     }
 
     pub fn run(self: &mut Self) -> Result<(), PatchError> {
-        let audio_host = cpal::default_host();
+        let (client, _status) =
+            jack::Client::new("boucle", jack::ClientOptions::NO_START_SERVER).unwrap();
 
-        let audio_in = audio_host.default_input_device()
-            .ok_or(PatchError { message: "Unable to open default input device".to_string() })?;
-        let audio_out = audio_host.default_output_device()
-            .ok_or(PatchError { message: "Unable to open default input device".to_string() })?;
-        let supported_audio_config = boucle::cpal_helpers::get_audio_config(&self.boucle_rc.lock().unwrap(), &audio_out);
-
-        let sample_format = supported_audio_config.sample_format();
-        info!("Sample format: {:?}", sample_format);
-
-        let input_audio_config: cpal::StreamConfig = supported_audio_config.clone().into();
-        let _audio_in_stream = match sample_format {
-            // FIXME: do we need to support all these? Organelle should give us same each time.
-            cpal::SampleFormat::F32 => boucle::cpal_helpers::open_in_stream::<f32>(audio_in, input_audio_config, self.buffers_rc.clone()),
-            cpal::SampleFormat::I16 => boucle::cpal_helpers::open_in_stream::<i16>(audio_in, input_audio_config, self.buffers_rc.clone()),
-            cpal::SampleFormat::U16 => boucle::cpal_helpers::open_in_stream::<u16>(audio_in, input_audio_config, self.buffers_rc.clone()),
-        };
-
-        let output_audio_config: cpal::StreamConfig = supported_audio_config.into();
-        let _audio_out_stream = match sample_format {
-            cpal::SampleFormat::F32 => boucle::cpal_helpers::open_out_stream::<f32>(audio_out, output_audio_config, self.boucle_rc.clone(), self.buffers_rc.clone()),
-            cpal::SampleFormat::I16 => boucle::cpal_helpers::open_out_stream::<i16>(audio_out, output_audio_config, self.boucle_rc.clone(), self.buffers_rc.clone()),
-            cpal::SampleFormat::U16 => boucle::cpal_helpers::open_out_stream::<u16>(audio_out, output_audio_config, self.boucle_rc.clone(), self.buffers_rc.clone()),
-        };
+        let in_port = client
+            .register_port("boucle_in", jack::AudioIn::default())
+            .unwrap();
+        let mut out_port = client
+            .register_port("boucle_out", jack::AudioOut::default())
+            .unwrap();
 
         self.signal_loaded();
         self.update_screen();
+
+        let boucle_rc = self.boucle_rc.clone();
+        let buffers_rc = self.buffers_rc.clone();
+        let process_callback = move |_: &jack::Client, ps: &jack::ProcessScope| -> jack::Control {
+            let mut boucle = boucle_rc.lock().unwrap();
+            let mut buffers = buffers_rc.lock().unwrap();
+            let mut play_clock = buffers.play_clock.clone();
+            let mut record_pos = buffers.record_pos.clone();
+            let loop_length = boucle.loop_length();
+
+            // Read input into buffer
+            {
+                let mut record_buffer: &mut Buffer = match buffers.current_input {
+                    InputBuffer::A => &mut buffers.input_a,
+                    InputBuffer::B => &mut buffers.input_b,
+                };
+
+                for &s in in_port.as_slice(ps) {
+                    record_buffer[record_pos] = s;
+                    record_pos += 1;
+                    if record_pos >= loop_length {
+                        if buffers.current_input == InputBuffer::A {
+                            buffers.current_input = InputBuffer::B;
+                            record_buffer = &mut buffers.input_b;
+                        } else {
+                            buffers.current_input = InputBuffer::A;
+                            record_buffer = &mut buffers.input_a;
+                        }
+                        debug!("Record buffer flip");
+                        record_pos = 0;
+                    }
+                }
+            }
+
+            buffers.record_pos = record_pos;
+
+            let out_buf = out_port.as_mut_slice(ps);
+            {
+                let mut in_buffer = match buffers.current_output {
+                    InputBuffer::A => &buffers.input_a,
+                    InputBuffer::B => &buffers.input_b,
+                };
+
+                let mut out_pos = 0;
+                let play_pos = play_clock % loop_length;
+                let span = std::cmp::min(loop_length - play_pos, out_buf.len());
+                debug!("Play clock {} pos {}/{} span {} (total data {})", play_clock, play_pos, loop_length, span, out_buf.len());
+
+                let ops = boucle.event_recorder.ops_for_period(play_clock, span);
+                boucle.process_buffer(&in_buffer, play_clock, span,
+                                      &ops, &mut |s| {
+                    out_buf[out_pos] = s;
+                    out_pos += 1;
+                });
+                play_clock += span;
+
+                if out_pos < out_buf.len() {
+                    // Flip buffer and continue
+                    let span_2 = out_buf.len() - span;
+                    debug!("play buffer flip");
+
+                    if buffers.current_output == InputBuffer::A {
+                        buffers.current_output = InputBuffer::B;
+                        in_buffer = &mut buffers.input_b;
+                    } else {
+                        buffers.current_output = InputBuffer::A;
+                        in_buffer = &mut buffers.input_a;
+                    }
+
+                    let ops = boucle.event_recorder.ops_for_period(play_clock, span_2);
+                    boucle.process_buffer(&in_buffer, play_clock, span_2,
+                                          &ops, &mut |s| {
+                        out_buf[out_pos] = s;
+                        out_pos += 1;
+                    });
+                    play_clock += span_2;
+                }
+            }
+
+            buffers.play_clock = play_clock;
+
+            // Performer responds to what they hear.
+            // The MIDI events we receive are therefore treated as relative
+            // to the last thing the performer heard.
+            boucle.event_recorder.set_event_sync_point(Instant::now(), play_clock);
+            jack::Control::Continue
+        };
+
+        let _active_client = client.activate_async(
+            JackNotifications,
+            jack::ClosureProcessHandler::new(process_callback),
+        ).unwrap();
+
         loop {
             let update_screen = self.process_events();
 
@@ -199,7 +363,7 @@ impl Patch {
         }
 
         match message.addr.as_str() {
-            "/keys" => {
+            "/key" => {
                 if let [osc::Type::Int(key), osc::Type::Int(pressed)] = args(message) {
                     if *key >= 0 && *key <= 24 {
                         return self.handle_key(*key, *pressed >= 1);
@@ -231,7 +395,7 @@ impl Patch {
     }
 
     fn update_screen(self: &Self) {
-        let header = format!("BPM: {}  Loop: {}", self.bpm, self.loop_beats);
+        let header = format!("BPM: {:.1}  Loop: {}", self.bpm, self.loop_beats);
 
         let addr = "/oled/line/1".to_string();
         let args = vec![osc::Type::String(header.to_string())];

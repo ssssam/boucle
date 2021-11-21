@@ -12,21 +12,6 @@ impl fmt::Display for PatchError {
     }
 }
 
-impl From<cpal::DevicesError> for PatchError {
-    fn from(error: cpal::DevicesError) -> Self {
-        PatchError {
-            message: error.to_string(),
-        }
-    }
-}
-
-impl From<cpal::DeviceNameError> for PatchError {
-    fn from(error: cpal::DeviceNameError) -> Self {
-        PatchError {
-            message: error.to_string(),
-        }
-    }
-}
 impl From<io::Error> for PatchError {
     fn from(error: io::Error) -> Self {
         PatchError {
