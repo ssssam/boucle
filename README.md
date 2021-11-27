@@ -48,6 +48,8 @@ Hooray!
 
 [dblue Glitch 2](http://illformed.com/glitch/)
 
+Freakshow Industries [Backmask](https://freakshowindustries.com/backmask)
+
 [iZotope Stutter Edit](https://www.izotope.com/en/products/create-and-design/stutter-edit.html) ([video](https://www.youtube.com/watch?v=68U2egYkoWs), [review](http://www.soundonsound.com/reviews/izotope-stutter-edit))
 
 [Effectrix](http://www.kvraudio.com/product/effectrix-by-sugar-bytes/details) ([video](https://www.youtube.com/watch?v=lsk1mJ_vwZw))
