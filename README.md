@@ -44,23 +44,41 @@ Hooray!
 
 ## Similar things
 
-[Ciat-Lonbarde Cocoquantus](http://ciat-lonbarde.net/cocoquantus/index.html)
+### Hardware
 
-[dblue Glitch 2](http://illformed.com/glitch/)
+ * [Ciat-Lonbarde Cocoquantus](http://ciat-lonbarde.net/cocoquantus/index.html)
 
-[iZotope Stutter Edit](https://www.izotope.com/en/products/create-and-design/stutter-edit.html) ([video](https://www.youtube.com/watch?v=68U2egYkoWs), [review](http://www.soundonsound.com/reviews/izotope-stutter-edit))
+ * [Roland Scooper](https://www.roland.com/global/products/scooper/) ([video](https://www.youtube.com/watch?v=l_e_IUgKlGQ))
 
-[Effectrix](http://www.kvraudio.com/product/effectrix-by-sugar-bytes/details) ([video](https://www.youtube.com/watch?v=lsk1mJ_vwZw))
+ * Roland SP404, particularly [DJFX LOOPER](https://articles.roland.com/sp-404-djfx-looper-and-how-to-use-it)
 
-[Roland Scooper](https://www.roland.com/global/products/scooper/) ([video](https://www.youtube.com/watch?v=l_e_IUgKlGQ))
+ * [Timetosser](https://www.alter.audio/)
 
-[The Finger](https://www.native-instruments.com/en/products/komplete/effects/the-finger/) ([video](https://www.youtube.com/watch?v=wrj6pkQloJM))
+ * [Vox Dynamic Looper](http://www.voxamps.com/vdl1)
 
-[Timetosser](https://www.alter.audio/)
+### Open software
 
-Tweakbench [Dropout](http://www.tweakbench.com/dropout) and [Yoink](http://www.tweakbench.com/yoink)
+ * [BOops](https://github.com/sjaehn/BOops) - Glitch effect sequencer similar to dBlue Glitch.
 
-[Vox Dynamic Looper](http://www.voxamps.com/vdl1)
+ * [Cut Glove](https://rodrigoconstanzo.com/2015/06/cut-glove/) and [~karma](https://rodrigoconstanzo.com/karma/).
+
+ * [Norns](https://monome.org/norns/) patches including:
+     * [Cheat codes](https://llllllll.co/t/cheat-codes-2-rev-220209-lts-5/38414)
+     * [makebreakbeat](https://llllllll.co/t/makebreakbeat/53301)
+
+### Propriatary software
+
+ * [dblue Glitch 2](http://illformed.com/glitch/)
+
+ * [Effectrix](http://www.kvraudio.com/product/effectrix-by-sugar-bytes/details) ([video](https://www.youtube.com/watch?v=lsk1mJ_vwZw))
+
+ * [iZotope Stutter Edit](https://www.izotope.com/en/products/create-and-design/stutter-edit.html) ([video](https://www.youtube.com/watch?v=68U2egYkoWs), [review](http://www.soundonsound.com/reviews/izotope-stutter-edit))
+
+ * [Loomer Sequent](https://www.loomer.co.uk/sequent.html)
+
+ * [The Finger](https://www.native-instruments.com/en/products/komplete/effects/the-finger/) ([video](https://www.youtube.com/watch?v=wrj6pkQloJM))
+
+ * Tweakbench [Dropout](http://www.tweakbench.com/dropout) and [Yoink](http://www.tweakbench.com/yoink)
 
 ## Architecture
 
